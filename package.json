@@ -1,0 +1,29 @@
+{
+  "name": "chess-cameo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn a real chess.com game into a per-percentage board cameo for a video series.",
+  "bin": {
+    "chess-cameo": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "cli": "tsx src/cli.ts",
+    "fetch-pieces": "node scripts/fetch-pieces.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "chess.js": "^1.0.0-beta.8",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

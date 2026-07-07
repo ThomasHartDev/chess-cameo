@@ -1,0 +1,6 @@
+node_modules/
+dist/
+out/
+*.log
+chess-cameo.pin.json
+.DS_Store
