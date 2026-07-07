@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { Command } from 'commander';
 import { getLatestGame, getGameByIndex, getGameByUrl, type ChessComGame } from './chesscom.js';
 import { parsePgn } from './game.js';
 import { positionAtPercent, framePercents } from './percent.js';
 import { renderPng, type RenderOptions } from './render.js';
 import { savePin, loadPin, type PinnedGame } from './config.js';
+import { startServer } from './server.js';
 
 const program = new Command();
 program
@@ -30,6 +31,17 @@ function pinFrom(game: ChessComGame, selector: string): PinnedGame {
   };
 }
 
+function pinFromPgn(pgn: string, selector: string): PinnedGame {
+  const parsed = parsePgn(pgn);
+  return {
+    source: { provider: 'chess.com', selector },
+    meta: parsed.meta,
+    totalPlies: parsed.totalPlies,
+    pgn,
+    pinnedAt: new Date().toISOString(),
+  };
+}
+
 program
   .command('pin')
   .description('Fetch a game from chess.com and pin it as the series source.')
@@ -38,7 +50,17 @@ program
   .option('--url <gameUrl>', 'pin a specific game url (requires --user)')
   .option('--month <YYYY/MM>', 'archive month for --index (e.g. 2025/01)')
   .option('--index <n>', 'game index within --month (0-based, negatives from end)', parseInt)
+  .option('--file <path>', 'pin from a local PGN file (any source: lichess export, etc.)')
   .action(async (o) => {
+    if (o.file) {
+      const pgn = readFileSync(o.file, 'utf8');
+      const pin = pinFromPgn(pgn, `file ${basename(o.file)}`);
+      savePin(pin);
+      console.log(`Pinned: ${pin.meta.white} vs ${pin.meta.black} (${pin.meta.result})`);
+      console.log(`  ${pin.totalPlies} plies · from ${o.file}`);
+      console.log(`  saved -> chess-cameo.pin.json`);
+      return;
+    }
     let game: ChessComGame;
     let selector: string;
     if (o.url) {
@@ -134,6 +156,14 @@ program
       console.log(`  ${r.caption} -> ${name}`);
     });
     console.log(`\n${pcts.length} frames -> ${o.dir}`);
+  });
+
+program
+  .command('serve')
+  .description('Start the local web scrubber: drag a percentage slider, preview + export frames.')
+  .option('-p, --port <n>', 'port', (v) => parseInt(v, 10), 4180)
+  .action((o) => {
+    startServer(o.port);
   });
 
 program.parseAsync().catch((err) => {
