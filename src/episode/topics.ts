@@ -1,0 +1,296 @@
+import type { Topic } from './types.js';
+
+// Five system-design topics. Each has a node/edge diagram (authored in local diagram
+// coords: x 0..1080, y 0..640) and a beat list. Each beat reveals more of the diagram and
+// carries what Thomas SAYS plus the on-screen line (SHOW). Voice: casual senior dev, spoken.
+
+export const TOPICS: Topic[] = [
+  {
+    slug: 'url-shortener',
+    title: 'Designing a URL Shortener',
+    tagline: 'How a long link becomes six characters',
+    nodes: [
+      { id: 'client', label: 'Client', x: 80, y: 330 },
+      { id: 'api', label: 'API', sub: 'shorten + resolve', x: 440, y: 330 },
+      { id: 'idgen', label: 'ID Gen', sub: 'base62', x: 440, y: 120 },
+      { id: 'kv', label: 'KV Store', sub: 'code → url', x: 820, y: 330 },
+      { id: 'cache', label: 'Cache', sub: 'hot links', x: 820, y: 120 },
+      { id: 'analytics', label: 'Click Queue', sub: 'async', x: 820, y: 540 },
+    ],
+    edges: [
+      { from: 'client', to: 'api' },
+      { from: 'idgen', to: 'api', dashed: true },
+      { from: 'api', to: 'kv', label: 'write mapping' },
+      { from: 'api', to: 'cache', label: 'read-through', dashed: true },
+      { from: 'api', to: 'analytics', label: 'log click', dashed: true },
+    ],
+    beats: [
+      {
+        say: "You paste a huge link, you get back six characters. Let's build the machine behind that.",
+        show: 'A short link is just a lookup: code in, long URL out.',
+        visible: ['client', 'api'],
+        highlight: ['api'],
+      },
+      {
+        say: 'First the code. Take an auto-increment id, encode it base62. Six characters covers 56 billion links.',
+        show: 'Turn an incrementing id into base62. Six chars covers 56B links.',
+        visible: ['client', 'api', 'idgen'],
+        highlight: ['idgen', 'idgen>api'],
+      },
+      {
+        say: 'Store the mapping. Code to long URL, one write, indexed by the code. A key-value store is all you need.',
+        show: 'Store code → URL. One indexed write, no relations.',
+        visible: ['client', 'api', 'idgen', 'kv'],
+        highlight: ['kv', 'api>kv'],
+      },
+      {
+        say: "The read path is where the traffic is. A visit is a lookup by code, then a 302 redirect. That's it.",
+        show: 'A visit = lookup by code → 302 redirect.',
+        visible: ['client', 'api', 'idgen', 'kv'],
+        highlight: ['client>api', 'api>kv'],
+      },
+      {
+        say: 'Most traffic hits a handful of links. Put those in Redis so the hot path never touches the database.',
+        show: '80% of hits go to 20% of links. Cache those in Redis.',
+        visible: ['client', 'api', 'idgen', 'kv', 'cache'],
+        highlight: ['cache', 'api>cache'],
+      },
+      {
+        say: "Last thing: count clicks off to the side, on a queue. Never inline. The redirect has to stay instant.",
+        show: 'Log clicks to a queue, not inline, so redirects stay fast.',
+        visible: ['client', 'api', 'idgen', 'kv', 'cache', 'analytics'],
+        highlight: ['analytics', 'api>analytics'],
+      },
+    ],
+  },
+  {
+    slug: 'rate-limiter',
+    title: 'Designing a Rate Limiter',
+    tagline: 'The bouncer that keeps your API standing',
+    nodes: [
+      { id: 'client', label: 'Client', x: 80, y: 330 },
+      { id: 'gw', label: 'Gateway', x: 440, y: 330 },
+      { id: 'limiter', label: 'Token Bucket', sub: 'per user', x: 440, y: 120 },
+      { id: 'redis', label: 'Redis', sub: 'counters', x: 820, y: 120 },
+      { id: 'svc', label: 'Service', sub: 'allowed', x: 820, y: 330 },
+      { id: 'reject', label: '429', sub: 'over limit', x: 820, y: 540 },
+    ],
+    edges: [
+      { from: 'client', to: 'gw' },
+      { from: 'gw', to: 'limiter' },
+      { from: 'limiter', to: 'redis', label: 'atomic incr' },
+      { from: 'gw', to: 'svc', label: 'token left' },
+      { from: 'gw', to: 'reject', label: 'bucket empty' },
+    ],
+    beats: [
+      {
+        say: "Your API is one bad script away from getting hammered. A rate limiter is the bouncer at the door.",
+        show: 'Cap how fast any one caller can hit you.',
+        visible: ['client', 'gw'],
+        highlight: ['gw'],
+      },
+      {
+        say: 'Token bucket is the classic. Each user gets a bucket that refills over time. A request costs one token.',
+        show: 'Each user gets a bucket that refills over time; 1 request = 1 token.',
+        visible: ['client', 'gw', 'limiter'],
+        highlight: ['limiter', 'gw>limiter'],
+      },
+      {
+        say: 'You have ten servers, so the count lives in Redis. One atomic increment per request, everyone agrees.',
+        show: 'Counters live in Redis. One atomic incr, all servers agree.',
+        visible: ['client', 'gw', 'limiter', 'redis'],
+        highlight: ['redis', 'limiter>redis'],
+      },
+      {
+        say: 'Token left in the bucket? Let the request through to the service. Normal traffic never even notices.',
+        show: 'Token available → pass through.',
+        visible: ['client', 'gw', 'limiter', 'redis', 'svc'],
+        highlight: ['svc', 'gw>svc'],
+      },
+      {
+        say: "Bucket empty? Return a 429 with a Retry-After header so well-behaved clients back off on their own.",
+        show: 'Empty bucket → 429 + Retry-After.',
+        visible: ['client', 'gw', 'limiter', 'redis', 'svc', 'reject'],
+        highlight: ['reject', 'gw>reject'],
+      },
+      {
+        say: "One decision people skip: if Redis blinks, do you fail open and let traffic through, or fail closed? Pick on purpose.",
+        show: 'If Redis is down: fail open or fail closed? Decide up front.',
+        visible: ['client', 'gw', 'limiter', 'redis', 'svc', 'reject'],
+        highlight: ['redis'],
+      },
+    ],
+  },
+  {
+    slug: 'news-feed',
+    title: 'Designing a News Feed',
+    tagline: 'Why your feed loads before you finish scrolling',
+    nodes: [
+      { id: 'author', label: 'Author', sub: 'posts', x: 80, y: 120 },
+      { id: 'writeapi', label: 'Write API', x: 440, y: 120 },
+      { id: 'fanout', label: 'Fan-out Worker', x: 440, y: 330 },
+      { id: 'feedcache', label: 'Feed Cache', sub: 'per follower', x: 820, y: 330 },
+      { id: 'reader', label: 'Follower', x: 80, y: 540 },
+      { id: 'readapi', label: 'Read API', x: 440, y: 540 },
+    ],
+    edges: [
+      { from: 'author', to: 'writeapi' },
+      { from: 'writeapi', to: 'fanout' },
+      { from: 'fanout', to: 'feedcache', label: 'push to followers' },
+      { from: 'reader', to: 'readapi' },
+      { from: 'readapi', to: 'feedcache', label: 'read feed' },
+    ],
+    beats: [
+      {
+        say: "Instagram-style feed. The hard part isn't storing posts, it's showing everyone's feed instantly.",
+        show: "The problem isn't storage. It's read speed.",
+        visible: ['author', 'writeapi'],
+        highlight: ['writeapi'],
+      },
+      {
+        say: 'Trick: do the work at write time. When you post, a worker copies it into each follower’s feed ahead of time.',
+        show: 'Fan-out on write: copy each post into followers’ feeds up front.',
+        visible: ['author', 'writeapi', 'fanout', 'feedcache'],
+        highlight: ['fanout', 'fanout>feedcache'],
+      },
+      {
+        say: "Now a follower opening the app is just a cache read. No joins, no scanning. Their feed is already built.",
+        show: "Reading a feed is now a single cache read.",
+        visible: ['author', 'writeapi', 'fanout', 'feedcache', 'reader', 'readapi'],
+        highlight: ['readapi', 'readapi>feedcache'],
+      },
+      {
+        say: "Then the catch. Someone with 40 million followers posts once, and that's 40 million writes. Fan-out breaks.",
+        show: 'A celebrity post = millions of writes. Fan-out-on-write breaks.',
+        visible: ['author', 'writeapi', 'fanout', 'feedcache', 'reader', 'readapi'],
+        highlight: ['fanout'],
+      },
+      {
+        say: "So go hybrid. Fan out normal users on write, but pull celebrity posts at read time and merge them in.",
+        show: 'Hybrid: fan-out normal users, pull celebrities on read.',
+        visible: ['author', 'writeapi', 'fanout', 'feedcache', 'reader', 'readapi'],
+        highlight: ['readapi>feedcache', 'feedcache'],
+      },
+      {
+        say: "Last step is ranking. Merge, then sort by recency, affinity, and engagement before it ever hits the screen.",
+        show: 'Rank the merged list by recency, affinity, and engagement.',
+        visible: ['author', 'writeapi', 'fanout', 'feedcache', 'reader', 'readapi'],
+        highlight: ['readapi'],
+      },
+    ],
+  },
+  {
+    slug: 'chat-system',
+    title: 'Designing a Chat System',
+    tagline: 'Stay connected, and never lose a message',
+    nodes: [
+      { id: 'a', label: 'Client A', x: 80, y: 120 },
+      { id: 'gw', label: 'WS Gateway', x: 440, y: 120 },
+      { id: 'msg', label: 'Message Svc', x: 440, y: 330 },
+      { id: 'store', label: 'History Store', x: 820, y: 330 },
+      { id: 'queue', label: 'Fan-out Log', x: 820, y: 120 },
+      { id: 'b', label: 'Client B', x: 80, y: 540 },
+    ],
+    edges: [
+      { from: 'a', to: 'gw', label: 'websocket' },
+      { from: 'gw', to: 'msg' },
+      { from: 'msg', to: 'store', label: 'persist first' },
+      { from: 'msg', to: 'queue', label: 'publish' },
+      { from: 'queue', to: 'b', label: 'deliver', dashed: true },
+    ],
+    beats: [
+      {
+        say: "Real-time chat is two problems wearing one coat: stay connected, and never lose a message.",
+        show: 'Two problems: stay connected, and durability.',
+        visible: ['a', 'gw'],
+        highlight: ['gw'],
+      },
+      {
+        say: "HTTP is request-response, that won't do. You need a socket that stays open, a WebSocket per client.",
+        show: 'WebSocket: one open connection per client.',
+        visible: ['a', 'gw'],
+        highlight: ['a>gw', 'gw'],
+      },
+      {
+        say: "A message hits the service, gets an id and a server timestamp, and is written to the store before anything else.",
+        show: 'Persist first: id + server timestamp, then anything else.',
+        visible: ['a', 'gw', 'msg', 'store'],
+        highlight: ['store', 'msg>store'],
+      },
+      {
+        say: "Then publish it. Anyone online in that conversation gets it pushed straight down their open socket.",
+        show: 'Publish → push to everyone online in the thread.',
+        visible: ['a', 'gw', 'msg', 'store', 'queue', 'b'],
+        highlight: ['queue', 'msg>queue'],
+      },
+      {
+        say: "Recipient offline? Doesn't matter, it's already stored. Deliver on reconnect and fire a push notification.",
+        show: 'Offline? Already stored. Deliver on reconnect + push.',
+        visible: ['a', 'gw', 'msg', 'store', 'queue', 'b'],
+        highlight: ['store', 'b'],
+      },
+      {
+        say: "Order by the server timestamp, not arrival order. Clocks and networks lie. The store is the source of truth.",
+        show: 'Order by server time. The store is the source of truth.',
+        visible: ['a', 'gw', 'msg', 'store', 'queue', 'b'],
+        highlight: ['store'],
+      },
+    ],
+  },
+  {
+    slug: 'cdn-caching',
+    title: 'How a CDN Actually Works',
+    tagline: 'Why a US site loads instantly in Tokyo',
+    nodes: [
+      { id: 'user', label: 'User', sub: 'Tokyo', x: 80, y: 330 },
+      { id: 'edge', label: 'Edge PoP', sub: 'cache', x: 440, y: 330 },
+      { id: 'origin', label: 'Origin', sub: 'Virginia', x: 820, y: 330 },
+      { id: 'store', label: 'Object Store', x: 820, y: 120 },
+      { id: 'purge', label: 'Purge API', x: 440, y: 120 },
+    ],
+    edges: [
+      { from: 'user', to: 'edge', label: 'nearest PoP' },
+      { from: 'edge', to: 'origin', label: 'on miss' },
+      { from: 'origin', to: 'store' },
+      { from: 'purge', to: 'edge', label: 'invalidate', dashed: true },
+    ],
+    beats: [
+      {
+        say: "Why does a site hosted in Virginia load instantly in Tokyo? It's not magic, it's caching close to you.",
+        show: 'Serve bytes from a machine near the user, not the origin.',
+        visible: ['user', 'edge'],
+        highlight: ['edge'],
+      },
+      {
+        say: "Your first stop is an edge server a few miles away. If it already has the file, you get it in milliseconds.",
+        show: 'Cache hit at the edge = single-digit milliseconds.',
+        visible: ['user', 'edge'],
+        highlight: ['edge', 'user>edge'],
+      },
+      {
+        say: "Cache miss? The edge fetches from origin once, hands it to you, and keeps a copy for the next person.",
+        show: 'Miss → fetch from origin once, cache, then serve.',
+        visible: ['user', 'edge', 'origin', 'store'],
+        highlight: ['edge>origin', 'origin'],
+      },
+      {
+        say: "Every file carries a TTL, which is how long the edge is allowed to serve it before checking back with origin.",
+        show: 'TTL controls how long the edge may serve a cached copy.',
+        visible: ['user', 'edge', 'origin', 'store'],
+        highlight: ['edge'],
+      },
+      {
+        say: "Shipped a fix and can't wait for the TTL? Purge the key and every edge on earth drops it at once.",
+        show: 'Purge the key → all PoPs drop it immediately.',
+        visible: ['user', 'edge', 'origin', 'store', 'purge'],
+        highlight: ['purge', 'purge>edge'],
+      },
+      {
+        say: "It all hinges on the cache key. Get query params or cookies wrong and you'll serve one user's page to another.",
+        show: 'The cache key is everything. Get it wrong and you leak the wrong page.',
+        visible: ['user', 'edge', 'origin', 'store', 'purge'],
+        highlight: ['edge'],
+      },
+    ],
+  },
+];

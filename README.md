@@ -68,6 +68,23 @@ ffmpeg -framerate 30 -i out/frames/frame-%04d.png -c:v libx264 -pix_fmt yuv420p 
 chess.com [Published-Data API](https://www.chess.com/news/view/published-data-api) — public,
 no auth, just a User-Agent. Games carry full PGN, so any public game is fair game.
 
+## System Design, Out Loud (video episodes)
+
+The chess cameo exists to ride along in a video series. `src/episode/` turns a system-design
+topic into a full business-day episode: a spoken script, Remotion-rendered 1920x1080 TV frames
+(the architecture diagram builds up beat by beat), and the chess board cameo per frame. The game
+advances continuously across every episode of the series, 0% to 100%.
+
+```bash
+pnpm exec tsx src/cli.ts pin --user hikaru --month 2025/01 --index 0   # pin the cameo game
+pnpm exec tsx src/episode/generate.ts --start 2026-07-07 --count 5     # 5 business-day episodes
+bash scripts/push-to-laptop.sh                                         # ship to the laptop Desktop
+```
+
+Each episode lands in `out/episodes/<date>/` with `script.md`, `frames/beat-NN.png`,
+`chess/beat-NN.png`, and `episode.json`. Topics live in `src/episode/topics.ts`; the frame layout
+is `remotion/TVFrame.tsx`. See the `system-design-cast` skill for the full workflow.
+
 ## Library use
 
 ```ts
