@@ -11,11 +11,36 @@ import { positionAtPercent } from '../percent.js';
 import { renderPng } from '../render.js';
 import { TOPICS } from './topics.js';
 import { loadTopicFile } from './validate.js';
-import type { TVFrameProps } from './types.js';
+import type { TVFrameProps, Topic, Beat } from './types.js';
 
-const SERIES = 'System Design, Out Loud';
+const SERIES = 'Software Engineering Interview';
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Generic interviewer follow-ups used when a beat doesn't supply its own interviewer line.
+const FOLLOWUPS = [
+  'Okay, keep going. What happens next?',
+  'Good. Why that choice?',
+  'And how does that piece fit in?',
+  'What breaks first at scale here?',
+  'Walk me through the trade-off.',
+  'Anything you would add before we wrap?',
+];
+
+/** The interviewer's line for a beat: explicit, else the opener on beat 0, else a follow-up. */
+function interviewerLine(topic: Topic, beat: Beat, index: number): string {
+  if (beat.interviewer) return beat.interviewer;
+  if (index === 0) {
+    const ask = topic.interviewPrompt ?? `walk me through ${topic.title.replace(/^(Designing|Building|How)\b/i, '').trim().toLowerCase()}`;
+    return `For today's software engineering interview: ${ask}.`;
+  }
+  return FOLLOWUPS[index % FOLLOWUPS.length];
+}
+
+/** The candidate's line for a beat: explicit interviewee, else the legacy `say`. */
+function intervieweeLine(beat: Beat): string {
+  return beat.interviewee ?? beat.say ?? '';
+}
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -148,7 +173,8 @@ async function main() {
         chess: `chess/beat-${num}.png`,
         gamePct: Math.round(chess.pct * 10) / 10,
         gameCaption: chess.caption,
-        say: beat.say,
+        interviewer: interviewerLine(ep.topic, beat, b),
+        interviewee: intervieweeLine(beat),
         show: beat.show,
       });
       console.log(`  EP${ep.episodeNo} ${key} beat ${b + 1}/${beats.length} · game ${Math.round(pct)}%`);
@@ -172,7 +198,9 @@ async function main() {
     frameMeta.forEach((f) => {
       lines.push(`## Beat ${f.index} — \`${f.frame}\` — game ${f.gamePct}% (${f.gameCaption})`);
       lines.push('');
-      lines.push(`**Say:** ${f.say}`);
+      lines.push(`**Interviewer:** ${f.interviewer}`);
+      lines.push('');
+      lines.push(`**You (candidate):** ${f.interviewee}`);
       lines.push('');
       lines.push(`**On screen:** ${f.show}`);
       lines.push('');

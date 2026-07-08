@@ -21,9 +21,11 @@ export function validateTopic(raw: Topic, label = 'topic'): Topic {
       if (!h.includes('>') && !nodeIds.has(h)) problems.push(`beat ${i + 1} highlights unknown node "${h}"`);
     });
   });
-  // em dashes are banned in the external-facing say/show lines
+  // em dashes are banned in every external-facing line
   (raw.beats ?? []).forEach((b, i) => {
-    if ((b.say ?? '').includes('—') || (b.show ?? '').includes('—')) problems.push(`beat ${i + 1} contains an em dash`);
+    const text = [b.say, b.interviewee, b.interviewer, b.show].filter(Boolean).join(' ');
+    if (text.includes('—')) problems.push(`beat ${i + 1} contains an em dash`);
+    if (!b.interviewee && !b.say) problems.push(`beat ${i + 1} has no interviewee/say line`);
   });
   if (problems.length) throw new Error(`Invalid ${label}:\n  - ${problems.join('\n  - ')}`);
   return raw;

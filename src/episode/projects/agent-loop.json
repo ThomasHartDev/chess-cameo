@@ -2,6 +2,7 @@
   "slug": "agent-loop",
   "title": "Building an Agent Loop",
   "tagline": "The core of turbo-agent-kit, no framework, ~300 lines",
+  "interviewPrompt": "build the core of an LLM agent loop from scratch, no framework",
   "nodes": [
     { "id": "user", "label": "User", "sub": "message in", "x": 70, "y": 330 },
     { "id": "orch", "label": "Orchestrator", "sub": "loop · max 5 steps", "x": 430, "y": 330 },
@@ -12,7 +13,7 @@
   ],
   "edges": [
     { "from": "user", "to": "orch", "label": "user text" },
-    { "from": "orch", "to": "llm", "label": "complete(messages, tools)" },
+    { "from": "orch", "to": "llm", "label": "complete()" },
     { "from": "llm", "to": "tools", "label": "tool call", "dashed": true },
     { "from": "tools", "to": "orch", "label": "result", "dashed": true },
     { "from": "orch", "to": "out", "label": "final text" },
@@ -20,37 +21,43 @@
   ],
   "beats": [
     {
-      "say": "I just merged the core of an agent loop. No framework, about three hundred lines. Let me walk through how an LLM actually uses tools.",
+      "interviewer": "For today's software engineering interview: build the core of an LLM agent loop from scratch, no framework. Start with the shape.",
+      "interviewee": "Sure. At its core an agent loop is a conversation plus a controller that decides when to stop. I just merged this in turbo-agent-kit, about three hundred lines. Let me build it up.",
       "show": "An agent loop is a conversation plus a controller that decides when to stop.",
       "visible": ["user", "orch"],
       "highlight": ["orch"]
     },
     {
-      "say": "Everything is a list of messages. A user message goes in, and the orchestrator owns the turn from there.",
+      "interviewer": "What's the data model underneath it?",
+      "interviewee": "Everything is a list of messages: user, assistant, tool. A user message goes in, and the orchestrator owns the turn from there.",
       "show": "One conversation is an ordered list of messages: user, assistant, tool.",
       "visible": ["user", "orch"],
       "highlight": ["user", "user>orch"]
     },
     {
-      "say": "Each step it hands the whole message history to the model and asks one question: give me a final answer, or a tool call.",
+      "interviewer": "How does the model actually decide to use a tool?",
+      "interviewee": "Each step I hand the whole message history to the model and ask one thing: give me a final answer, or a tool call.",
       "show": "Every step asks the model: final text, or call a tool?",
       "visible": ["user", "orch", "llm"],
       "highlight": ["llm", "orch>llm"]
     },
     {
-      "say": "If it wants a tool, the name is looked up in a registry and the arguments are validated with zod before a single line runs.",
+      "interviewer": "Say it asks for a tool. What happens then?",
+      "interviewee": "The name is looked up in a registry and the arguments are validated with zod before a single line runs.",
       "show": "Tool calls resolve by name in a registry; args are zod-validated first.",
       "visible": ["user", "orch", "llm", "tools"],
       "highlight": ["tools", "llm>tools"]
     },
     {
-      "say": "The tool result gets pushed back into the conversation and the loop runs again. It is capped at five steps so it can never spin forever.",
+      "interviewer": "And you feed the result back into the model?",
+      "interviewee": "Right. The tool output gets pushed into the conversation and the loop runs again. It is capped at five steps so it can never spin forever.",
       "show": "Tool output feeds back in; the loop repeats, capped at 5 steps.",
       "visible": ["user", "orch", "llm", "tools"],
       "highlight": ["tools>orch", "orch"]
     },
     {
-      "say": "Two things I bolted on. Telemetry times every model and tool call, and an onMessage hook streams each message so a UI can show the turn as it happens.",
+      "interviewer": "Anything you would add before we wrap?",
+      "interviewee": "Two things I bolted on. Telemetry times every model and tool call, and an onMessage hook streams each message so a UI can show the turn as it happens.",
       "show": "Telemetry times every call; onMessage streams the turn live.",
       "visible": ["user", "orch", "llm", "tools", "telem", "out"],
       "highlight": ["telem", "out", "orch>telem"]

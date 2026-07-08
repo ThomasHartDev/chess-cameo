@@ -16,8 +16,14 @@ export interface DiagramEdge {
 }
 
 export interface Beat {
-  /** Spoken narration (what Thomas says over this frame). */
-  say: string;
+  /**
+   * Candidate's spoken line (Thomas, the interviewee) for this frame. `interviewee` is the
+   * preferred field; `say` is kept for older topics and used as a fallback.
+   */
+  say?: string;
+  interviewee?: string;
+  /** Interviewer's line for this frame (the question, prompt, or follow-up). */
+  interviewer?: string;
   /** On-screen line (the lower-third caption). */
   show: string;
   /** Node ids visible on this frame. */
@@ -30,6 +36,8 @@ export interface Topic {
   slug: string;
   title: string;
   tagline: string;
+  /** The interviewer's opening ask, e.g. "walk me through how you'd design a URL shortener". */
+  interviewPrompt?: string;
   nodes: DiagramNode[];
   edges: DiagramEdge[];
   beats: Beat[];

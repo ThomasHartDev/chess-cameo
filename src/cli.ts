@@ -8,6 +8,7 @@ import { positionAtPercent, framePercents } from './percent.js';
 import { renderPng, type RenderOptions } from './render.js';
 import { savePin, loadPin, type PinnedGame } from './config.js';
 import { startServer } from './server.js';
+import { startFilmServer } from './film-server.js';
 
 const program = new Command();
 program
@@ -164,6 +165,15 @@ program
   .option('-p, --port <n>', 'port', (v) => parseInt(v, 10), 4180)
   .action((o) => {
     startServer(o.port);
+  });
+
+program
+  .command('film')
+  .description('Start the filming interface: browse episodes, step frames on the TV, read both scripts.')
+  .option('-p, --port <n>', 'port', (v) => parseInt(v, 10), 4181)
+  .option('-d, --dir <dir>', 'episodes directory', 'out/episodes')
+  .action((o) => {
+    startFilmServer(o.port, o.dir);
   });
 
 program.parseAsync().catch((err) => {

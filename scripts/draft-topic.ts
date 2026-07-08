@@ -43,10 +43,17 @@ interface Topic {
   slug: string;               // kebab-case
   title: string;              // e.g. "Building an Agent Loop"
   tagline: string;            // one short line, no em dashes
+  interviewPrompt: string;    // the interviewer's opening ask, e.g. "build an LLM agent loop from scratch"
   nodes: { id: string; label: string; sub?: string; x: number; y: number }[];
   edges: { from: string; to: string; label?: string; dashed?: boolean }[];
-  beats: { say: string; show: string; visible: string[]; highlight?: string[] }[];
+  beats: { interviewer: string; interviewee: string; show: string; visible: string[]; highlight?: string[] }[];
 }
+
+The whole thing is framed as a SOFTWARE ENGINEERING INTERVIEW. Each beat has two spoken lines:
+- "interviewer": the interviewer's question or prompt for this beat. Beat 1's interviewer line
+  MUST start with "For today's software engineering interview:" and pose the challenge.
+- "interviewee": the candidate (the developer) answering, first person, casual senior-dev voice.
+- "show": the on-screen caption (short).
 
 Rules:
 - The diagram MUST reflect the ACTUAL code below. Nodes = the real components/modules. Edges =
