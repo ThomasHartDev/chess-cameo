@@ -1,7 +1,7 @@
 // Generates N business-day "system design" episodes. Each episode = a dated folder with
 // per-beat TV frames (Remotion), the isolated chess cameo per beat, a script.md, and metadata.
 // The chess game steps forward continuously across ALL frames of ALL episodes (0% -> 100%).
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { bundle } from '@remotion/bundler';
 import { selectComposition, renderStill, openBrowser } from '@remotion/renderer';
@@ -10,7 +10,27 @@ import { parsePgn, type ParsedGame } from '../game.js';
 import { positionAtPercent } from '../percent.js';
 import { renderPng } from '../render.js';
 import { TOPICS } from './topics.js';
-import type { TVFrameProps } from './types.js';
+import type { TVFrameProps, Topic } from './types.js';
+
+/** Load + validate a project-derived Topic authored as JSON (one repo/PR = one episode). */
+function loadTopicFile(path: string): Topic {
+  const raw = JSON.parse(readFileSync(path, 'utf8')) as Topic;
+  const problems: string[] = [];
+  if (!raw.slug || !raw.title) problems.push('missing slug/title');
+  if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) problems.push('no nodes');
+  if (!Array.isArray(raw.beats) || raw.beats.length === 0) problems.push('no beats');
+  const nodeIds = new Set((raw.nodes ?? []).map((n) => n.id));
+  (raw.edges ?? []).forEach((e) => {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) problems.push(`edge ${e.from}>${e.to} references unknown node`);
+  });
+  (raw.beats ?? []).forEach((b, i) => {
+    (b.visible ?? []).forEach((v) => {
+      if (!nodeIds.has(v)) problems.push(`beat ${i + 1} shows unknown node "${v}"`);
+    });
+  });
+  if (problems.length) throw new Error(`Invalid topic ${path}:\n  - ${problems.join('\n  - ')}`);
+  return raw;
+}
 
 const SERIES = 'System Design, Out Loud';
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -45,29 +65,36 @@ function chessFor(game: ParsedGame, pct: number) {
   return { png, uri: `data:image/png;base64,${png.toString('base64')}`, caption: r.caption, pct: r.pct };
 }
 
-function parseArgs(argv: string[]): { start: Date; count: number; outDir: string } {
+function parseArgs(argv: string[]): { start: Date; count: number; outDir: string; topicFile?: string } {
   const get = (flag: string) => {
     const i = argv.indexOf(flag);
     return i >= 0 ? argv[i + 1] : undefined;
   };
   const startStr = get('--start');
   const start = startStr ? new Date(startStr + 'T12:00:00') : new Date();
-  const count = Number(get('--count') ?? '5');
+  const topicFile = get('--topic-file');
+  // A project topic file renders exactly one episode unless --count overrides.
+  const count = Number(get('--count') ?? (topicFile ? '1' : '5'));
   const outDir = resolve(get('--out') ?? 'out/episodes');
-  return { start, count, outDir };
+  return { start, count, outDir, topicFile };
 }
 
 async function main() {
-  const { start, count, outDir } = parseArgs(process.argv.slice(2));
+  const { start, count, outDir, topicFile } = parseArgs(process.argv.slice(2));
   const root = process.cwd();
 
   const pin = loadPin();
   const game = parsePgn(pin.pgn);
   const gameName = `${pin.meta.white} vs ${pin.meta.black}`;
 
+  const projectTopic = topicFile ? loadTopicFile(resolve(topicFile)) : null;
   const days = businessDays(start, count);
-  // pick topics for each episode (cycle if count > topics)
-  const episodes = days.map((d, i) => ({ date: d, topic: TOPICS[i % TOPICS.length], episodeNo: i + 1 }));
+  // A project topic renders that one topic; otherwise cycle the built-in system-design topics.
+  const episodes = days.map((d, i) => ({
+    date: d,
+    topic: projectTopic ?? TOPICS[i % TOPICS.length],
+    episodeNo: i + 1,
+  }));
   const totalFrames = episodes.reduce((n, e) => n + e.topic.beats.length, 0);
 
   console.log(`Bundling Remotion…`);
