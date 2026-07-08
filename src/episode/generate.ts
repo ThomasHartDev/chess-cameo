@@ -1,7 +1,7 @@
 // Generates N business-day "system design" episodes. Each episode = a dated folder with
 // per-beat TV frames (Remotion), the isolated chess cameo per beat, a script.md, and metadata.
 // The chess game steps forward continuously across ALL frames of ALL episodes (0% -> 100%).
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { bundle } from '@remotion/bundler';
 import { selectComposition, renderStill, openBrowser } from '@remotion/renderer';
@@ -10,27 +10,8 @@ import { parsePgn, type ParsedGame } from '../game.js';
 import { positionAtPercent } from '../percent.js';
 import { renderPng } from '../render.js';
 import { TOPICS } from './topics.js';
-import type { TVFrameProps, Topic } from './types.js';
-
-/** Load + validate a project-derived Topic authored as JSON (one repo/PR = one episode). */
-function loadTopicFile(path: string): Topic {
-  const raw = JSON.parse(readFileSync(path, 'utf8')) as Topic;
-  const problems: string[] = [];
-  if (!raw.slug || !raw.title) problems.push('missing slug/title');
-  if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) problems.push('no nodes');
-  if (!Array.isArray(raw.beats) || raw.beats.length === 0) problems.push('no beats');
-  const nodeIds = new Set((raw.nodes ?? []).map((n) => n.id));
-  (raw.edges ?? []).forEach((e) => {
-    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) problems.push(`edge ${e.from}>${e.to} references unknown node`);
-  });
-  (raw.beats ?? []).forEach((b, i) => {
-    (b.visible ?? []).forEach((v) => {
-      if (!nodeIds.has(v)) problems.push(`beat ${i + 1} shows unknown node "${v}"`);
-    });
-  });
-  if (problems.length) throw new Error(`Invalid topic ${path}:\n  - ${problems.join('\n  - ')}`);
-  return raw;
-}
+import { loadTopicFile } from './validate.js';
+import type { TVFrameProps } from './types.js';
 
 const SERIES = 'System Design, Out Loud';
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
