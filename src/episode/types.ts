@@ -15,6 +15,26 @@ export interface DiagramEdge {
   dashed?: boolean;
 }
 
+/** One line of a folder-structure tree shown alongside a code slide. */
+export interface TreeEntry {
+  /** Pre-indented label, e.g. "  orchestrator.ts" or "packages/agent-core/". */
+  text: string;
+  /** True for the file the code snippet is from (highlighted). */
+  active?: boolean;
+}
+
+/** A code slide: a real snippet from the PR plus the folder structure it lives in. */
+export interface CodeBlock {
+  /** Path shown as the editor tab, e.g. "packages/agent-core/src/orchestrator.ts". */
+  file: string;
+  /** Prism language id: typescript | tsx | javascript | json | bash | css | ... */
+  lang?: string;
+  /** The actual code excerpt (kept verbatim from the repo). */
+  code: string;
+  /** Folder structure. Always required on a code slide so the file has context. */
+  tree: TreeEntry[];
+}
+
 export interface Beat {
   /**
    * Candidate's spoken line (Thomas, the interviewee) for this frame. `interviewee` is the
@@ -30,6 +50,8 @@ export interface Beat {
   visible: string[];
   /** Node/edge ids to emphasize (nodes by id, edges as "from>to"). */
   highlight?: string[];
+  /** When present, this beat renders as a code slide (snippet + folder tree) instead of the diagram. */
+  code?: CodeBlock;
 }
 
 export interface Topic {
@@ -60,4 +82,6 @@ export interface TVFrameProps {
   chessDataUri: string;
   gamePct: number;
   gameCaption: string;
+  /** When set, the frame renders a code slide (snippet + folder tree) instead of the diagram. */
+  code?: CodeBlock | null;
 }

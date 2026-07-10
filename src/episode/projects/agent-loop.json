@@ -42,11 +42,51 @@
       "highlight": ["llm", "orch>llm"]
     },
     {
+      "interviewer": "Show me the actual loop.",
+      "interviewee": "Here it is. Up to five steps. Ask the model. If the result is final, push it and return. Otherwise look up the tool it named, run it, and push the result back so the next pass can see it.",
+      "show": "The loop: complete, then final-or-tool, capped at 5 steps.",
+      "visible": ["user", "orch", "llm", "tools"],
+      "code": {
+        "file": "packages/agent-core/src/orchestrator.ts",
+        "lang": "typescript",
+        "code": "for (let step = 0; step < MAX_STEPS; step++) {\n  const result = await llm.complete(messages, toolSpecs);\n\n  if (result.kind === \"final\") {\n    push({ role: \"assistant\", content: result.content });\n    return;\n  }\n\n  const tool = toolRegistry.get(result.toolCall.name);\n  const output = await tool.run(result.toolCall.args);\n  push({ role: \"tool\", content: output });\n}",
+        "tree": [
+          { "text": "packages/agent-core/" },
+          { "text": "  src/" },
+          { "text": "    orchestrator.ts", "active": true },
+          { "text": "    llm-provider.ts" },
+          { "text": "    tools.ts" },
+          { "text": "    telemetry.ts" },
+          { "text": "    types.ts" }
+        ]
+      }
+    },
+    {
       "interviewer": "Say it asks for a tool. What happens then?",
       "interviewee": "The name is looked up in a registry and the arguments are validated with zod before a single line runs.",
       "show": "Tool calls resolve by name in a registry; args are zod-validated first.",
       "visible": ["user", "orch", "llm", "tools"],
       "highlight": ["tools", "llm>tools"]
+    },
+    {
+      "interviewer": "How do you stop the model from calling a tool with garbage arguments?",
+      "interviewee": "Every tool is defined with a zod schema, and run parses the args before the body executes. Bad arguments throw right there instead of reaching my code.",
+      "show": "defineTool: zod-parse the args before the tool body runs.",
+      "visible": ["user", "orch", "llm", "tools"],
+      "code": {
+        "file": "packages/agent-core/src/tools.ts",
+        "lang": "typescript",
+        "code": "function defineTool<T>(spec: {\n  name: string;\n  description: string;\n  schema: z.ZodType<T>;\n  run: (args: T) => Promise<string>;\n}): Tool {\n  return {\n    name: spec.name,\n    description: spec.description,\n    run: (raw: unknown) => spec.run(spec.schema.parse(raw)),\n  };\n}",
+        "tree": [
+          { "text": "packages/agent-core/" },
+          { "text": "  src/" },
+          { "text": "    orchestrator.ts" },
+          { "text": "    llm-provider.ts" },
+          { "text": "    tools.ts", "active": true },
+          { "text": "    telemetry.ts" },
+          { "text": "    types.ts" }
+        ]
+      }
     },
     {
       "interviewer": "And you feed the result back into the model?",

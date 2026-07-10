@@ -26,6 +26,12 @@ export function validateTopic(raw: Topic, label = 'topic'): Topic {
     const text = [b.say, b.interviewee, b.interviewer, b.show].filter(Boolean).join(' ');
     if (text.includes('—')) problems.push(`beat ${i + 1} contains an em dash`);
     if (!b.interviewee && !b.say) problems.push(`beat ${i + 1} has no interviewee/say line`);
+    // A code slide must carry its folder structure so the file has context.
+    if (b.code) {
+      if (!b.code.file || !b.code.code) problems.push(`beat ${i + 1} code slide missing file/code`);
+      if (!Array.isArray(b.code.tree) || b.code.tree.length === 0)
+        problems.push(`beat ${i + 1} code slide has no folder tree`);
+    }
   });
   if (problems.length) throw new Error(`Invalid ${label}:\n  - ${problems.join('\n  - ')}`);
   return raw;

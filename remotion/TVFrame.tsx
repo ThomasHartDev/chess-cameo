@@ -1,5 +1,11 @@
 import { AbsoluteFill, Img } from 'remotion';
-import type { TVFrameProps, DiagramNode } from '../src/episode/types';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-jsx';
+import 'prismjs/components/prism-tsx';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-bash';
+import type { TVFrameProps, DiagramNode, CodeBlock } from '../src/episode/types';
 
 const BOX = { left: 60, top: 258, w: 1080, h: 640 }; // diagram area
 const NODE_W = 208;
@@ -46,6 +52,107 @@ export const DEFAULT_TV_PROPS: TVFrameProps = {
   gameCaption: 'start',
 };
 
+// Prism token colours (a compact one-dark-ish theme, inlined so headless render needs no CSS file).
+const PRISM_CSS = `
+.tok-comment,.token.comment{color:#6a7581}
+.token.keyword,.token.boolean,.token.builtin{color:#c678dd}
+.token.string,.token.char,.token.template-string,.token.regex{color:#98c379}
+.token.function,.token.method,.token.class-name{color:#61afef}
+.token.number,.token.constant{color:#d19a66}
+.token.operator,.token.punctuation{color:#8b98a5}
+.token.property,.token.attr-name{color:#e06c75}
+.token.tag{color:#e06c75}
+`;
+
+function CodeSlide({ code }: { code: CodeBlock }) {
+  const lang = (code.lang && Prism.languages[code.lang] ? code.lang : 'typescript') as string;
+  const grammar = Prism.languages[lang] ?? Prism.languages.typescript;
+  const html = Prism.highlight(code.code, grammar, lang);
+  // Size the font so the longest line fits the editor width and all lines fit its height.
+  const lines = code.code.split('\n');
+  const maxLen = Math.max(1, ...lines.map((l) => l.length));
+  const byWidth = Math.floor(720 / (maxLen * 0.61));
+  const byHeight = Math.floor(560 / (lines.length * 1.55));
+  const codeSize = Math.max(13, Math.min(24, byWidth, byHeight));
+  return (
+    <div style={{ position: 'absolute', left: 60, top: 250, width: 1090, height: 650, display: 'flex', gap: 18 }}>
+      <style>{PRISM_CSS}</style>
+      {/* Folder tree */}
+      <div
+        style={{
+          width: 300,
+          flex: '0 0 300px',
+          background: '#12171e',
+          border: `1px solid ${C.nodeBorder}`,
+          borderRadius: 12,
+          padding: '16px 14px',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ color: C.eyebrow, fontSize: 15, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 12 }}>
+          Files
+        </div>
+        <div style={{ fontFamily: 'DejaVu Sans Mono, monospace', fontSize: 18, lineHeight: 1.7 }}>
+          {code.tree.map((t, i) => (
+            <div
+              key={i}
+              style={{
+                color: t.active ? '#241a08' : C.sub,
+                background: t.active ? C.hot : 'transparent',
+                fontWeight: t.active ? 700 : 400,
+                borderRadius: 5,
+                padding: t.active ? '1px 6px' : '1px 6px',
+                whiteSpace: 'pre',
+              }}
+            >
+              {t.text}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Code editor */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          background: '#0b0f14',
+          border: `1px solid ${C.nodeBorder}`,
+          borderRadius: 12,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div
+          style={{
+            background: '#12171e',
+            borderBottom: `1px solid ${C.nodeBorder}`,
+            padding: '11px 18px',
+            color: C.label,
+            fontFamily: 'DejaVu Sans Mono, monospace',
+            fontSize: 17,
+          }}
+        >
+          <span style={{ color: C.hot }}>◈</span> {code.file}
+        </div>
+        <pre
+          style={{
+            margin: 0,
+            padding: '18px 22px',
+            fontFamily: 'DejaVu Sans Mono, monospace',
+            fontSize: codeSize,
+            lineHeight: 1.55,
+            color: '#c7d0da',
+            whiteSpace: 'pre',
+            overflow: 'hidden',
+          }}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function nodeMap(nodes: DiagramNode[]): Record<string, DiagramNode> {
   return Object.fromEntries(nodes.map((n) => [n.id, n]));
 }
@@ -91,7 +198,9 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
         <div style={{ color: C.sub, fontSize: 24, marginTop: 6 }}>{p.tagline}</div>
       </div>
 
-      {/* Diagram */}
+      {/* Code slide takes over the main area when present, else the diagram. */}
+      {p.code ? <CodeSlide code={p.code} /> : null}
+      {!p.code && (
       <svg
         width={1920}
         height={1080}
@@ -185,6 +294,7 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
           );
         })}
       </svg>
+      )}
 
       {/* Chess cameo */}
       <div style={{ position: 'absolute', right: 60, top: 232, width: 560 }}>

@@ -147,6 +147,7 @@ async function main() {
         chessDataUri: chess.uri,
         gamePct: chess.pct,
         gameCaption: chess.caption,
+        code: beat.code ?? null,
       };
 
       const framePath = join(framesDir, `beat-${num}.png`);
