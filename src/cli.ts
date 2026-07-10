@@ -171,7 +171,7 @@ program
   .command('film')
   .description('Start the filming interface: browse episodes, step frames on the TV, read both scripts.')
   .option('-p, --port <n>', 'port', (v) => parseInt(v, 10), 4181)
-  .option('-d, --dir <dir>', 'episodes directory', 'out/episodes')
+  .option('-d, --dir <dir>', 'episodes directory', process.env.FILM_EPISODES_DIR ?? '/root/.command-center/film-episodes')
   .action((o) => {
     startFilmServer(o.port, o.dir);
   });

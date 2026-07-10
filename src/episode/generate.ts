@@ -81,7 +81,9 @@ function parseArgs(argv: string[]): { start: Date; count: number; outDir: string
   const topicFile = get('--topic-file');
   // A project topic file renders exactly one episode unless --count overrides.
   const count = Number(get('--count') ?? (topicFile ? '1' : '5'));
-  const outDir = resolve(get('--out') ?? 'out/episodes');
+  // Default to a durable state dir (survives scratch cleanup) so the command-center Film tab
+  // keeps its episodes. Override with --out or FILM_EPISODES_DIR.
+  const outDir = resolve(get('--out') ?? process.env.FILM_EPISODES_DIR ?? '/root/.command-center/film-episodes');
   return { start, count, outDir, topicFile };
 }
 

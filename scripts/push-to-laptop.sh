@@ -5,7 +5,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="${1:-$REPO_ROOT/out/episodes}"        # dir of dated episode folders
+SRC="${1:-${FILM_EPISODES_DIR:-/root/.command-center/film-episodes}}"   # dir of dated episode folders
 BUNDLE="system-design-cast"
 STAGE="$REPO_ROOT/out/laptop"
 REMOTE="bellamacbook"
