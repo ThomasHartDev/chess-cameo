@@ -46,7 +46,12 @@ interface Topic {
   interviewPrompt: string;    // the interviewer's opening ask, e.g. "build an LLM agent loop from scratch"
   nodes: { id: string; label: string; sub?: string; x: number; y: number }[];
   edges: { from: string; to: string; label?: string; dashed?: boolean }[];
-  beats: { interviewer: string; interviewee: string; show: string; visible: string[]; highlight?: string[] }[];
+  beats: {
+    interviewer: string; interviewee: string; show: string;
+    visible: string[]; highlight?: string[];
+    // Present ONLY on code-slide beats. Snippet must be copied VERBATIM from the source below.
+    code?: { file: string; lang: string; code: string; tree: { text: string; active?: boolean }[] };
+  }[];
 }
 
 The whole thing is framed as a SOFTWARE ENGINEERING INTERVIEW. Each beat has two spoken lines:
@@ -63,13 +68,20 @@ Rules:
   Put the entry point on the left.
 - Do NOT create two edges between the same pair of nodes (no A->B AND B->A) — their labels collide.
   Model a request/response as ONE edge. Keep edge labels under ~22 characters.
-- Exactly 6 beats. Each beat reveals more of the diagram: "visible" is the cumulative list of node
-  ids shown so far (beat 1 shows 1-2 nodes, the last beat shows all). "highlight" lists node ids
-  and/or edges as "from>to" to emphasize this beat.
-- "say" = what the developer says out loud (first person, casual senior-dev voice, "I just merged...").
-  "show" = the on-screen caption (short, punchy).
-- NO em dashes anywhere. Use periods, commas, or colons. Every id in edges/visible/highlight MUST
-  exist in nodes.
+- 8 beats total: 6 diagram beats plus exactly 2 CODE-SLIDE beats interleaved where they fit best
+  (e.g. right after the beat that introduces the component the code implements). On the 6 diagram
+  beats "visible" is the cumulative list of node ids shown so far (beat 1 shows 1-2 nodes, the diagram
+  is complete by the end). "highlight" lists node ids and/or edges as "from>to" to emphasize a beat.
+- CODE SLIDES: set "code" on 2 beats. The snippet MUST be copied VERBATIM from the source files
+  below (do not invent or paraphrase code). Keep each snippet SHORT (about 8-16 lines, <= 60 chars
+  per line, trim to the essential lines). "code.file" = the real path. "code.lang" = typescript, tsx,
+  javascript, json, or bash. "code.tree" ALWAYS required: the folder structure the file lives in, one
+  entry per line with 2-space indentation baked into "text" (e.g. "  src/" then "    orchestrator.ts"),
+  and mark the shown file with "active": true. Use the real file paths from the PR file list below.
+  A code beat still needs interviewer/interviewee/show, and its "visible" should list the nodes shown
+  so far.
+- NO em dashes anywhere in prose (interviewer/interviewee/show/tagline). Code is exempt. Every id in
+  edges/visible/highlight MUST exist in nodes.
 - Return JSON only.`;
 
 function extractJson(text: string): string {
@@ -110,7 +122,10 @@ function main() {
 ## PR: ${meta.title}
 ${meta.body ?? ''}
 
-## Source files
+## Files changed in this PR (use these real paths for the folder trees)
+${prFiles.join('\n')}
+
+## Source files (copy code snippets VERBATIM from here)
 ${sources}
 `;
 
