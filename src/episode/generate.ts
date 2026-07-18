@@ -1,8 +1,9 @@
 // Generates N business-day "system design" episodes. Each episode = a dated folder with
 // per-beat TV frames (Remotion), the isolated chess cameo per beat, a script.md, and metadata.
 // The chess game steps forward continuously across ALL frames of ALL episodes (0% -> 100%).
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { optimizeImage } from '@thomashartdev/image-processing';
 import { bundle } from '@remotion/bundler';
 import { selectComposition, renderStill, openBrowser } from '@remotion/renderer';
 import { loadPin } from '../config.js';
@@ -63,6 +64,28 @@ function businessDays(start: Date, count: number): Date[] {
     cur.setDate(cur.getDate() + 1);
   }
   return out;
+}
+
+// Small optimized webp of the episode's final diagram, for the command-center
+// Film gallery (which would otherwise load the full ~180KB last-frame PNG per
+// card). ~480px wide webp lands ~14-19KB. Fail-soft: a thumb failure logs and
+// leaves the episode without one (the panel falls back to the last frame).
+const THUMB_NAME = 'thumb.webp';
+async function writeThumb(epDir: string, lastFrameAbs: string): Promise<string | undefined> {
+  try {
+    const input = readFileSync(lastFrameAbs);
+    const { buffer } = await optimizeImage(input, {
+      format: 'webp',
+      level: 'auto',
+      maxWidth: 480,
+      preserveAspect: true,
+    });
+    writeFileSync(join(epDir, THUMB_NAME), buffer);
+    return THUMB_NAME;
+  } catch (e) {
+    console.warn(`  thumb failed: ${(e as Error).message}`);
+    return undefined;
+  }
 }
 
 function chessFor(game: ParsedGame, pct: number) {
@@ -185,6 +208,9 @@ async function main() {
     }
     const endPct = ((globalFrame - 1) / denom) * 100;
 
+    // Thumbnail of the final diagram (last beat), for the Film gallery cards.
+    const thumb = await writeThumb(epDir, join(framesDir, `beat-${pad(beats.length)}.png`));
+
     // script.md
     const lines: string[] = [];
     lines.push(`# ${ep.topic.title}`);
@@ -224,6 +250,7 @@ async function main() {
           chessGame: gameName,
           gameStartPct: Math.round(startPct * 10) / 10,
           gameEndPct: Math.round(endPct * 10) / 10,
+          thumb,
           frames: frameMeta,
         },
         null,
