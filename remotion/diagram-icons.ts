@@ -69,6 +69,25 @@ export function getTechIcon(slug?: string): TechIcon | null {
   return REGISTRY[slug.toLowerCase()] ?? null;
 }
 
+function relLuminance(hex: string): number {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.114 * b;
+}
+
+/**
+ * Colors for a brand mark on the dark frame. simple-icons ships single-color marks meant
+ * to be recolored, so a near-black brand (Kafka #231F20) would otherwise disappear on the
+ * dark background. Very dark brands render as a light mark with a neutral accent (their
+ * recognized on-dark look); everything else keeps its brand color.
+ */
+export function onDark(hex: string): { accent: string; iconFill: string } {
+  if (relLuminance(hex) < 0.22) return { accent: '#5b6673', iconFill: '#d5dde5' };
+  return { accent: hex, iconFill: hex };
+}
+
 // Neutral, non-brand glyphs drawn in the icon slot when a shape has no `tech` icon,
 // so client/compute/component/queue nodes still read at a glance. 24x24 viewBox.
 export const SHAPE_GLYPHS: Partial<Record<string, string[]>> = {

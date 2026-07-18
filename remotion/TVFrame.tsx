@@ -6,7 +6,7 @@ import 'prismjs/components/prism-tsx';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-bash';
 import type { TVFrameProps, DiagramNode, CodeBlock, NodeShape } from '../src/episode/types';
-import { getTechIcon, SHAPE_GLYPHS } from './diagram-icons';
+import { getTechIcon, onDark, SHAPE_GLYPHS } from './diagram-icons';
 
 // The diagram now owns the full frame width (the chess board moved to its own image).
 // Node coords are authored in a local space; we fit them into this area at render time so
@@ -255,10 +255,11 @@ function NodeIcon({
   const ix = x - w / 2 + 16;
   const iy = y - h / 2 + 12;
   if (icon) {
+    const fill = onDark(icon.hex).iconFill;
     return (
       <svg x={ix} y={iy} width={ICON_PX} height={ICON_PX} viewBox="0 0 24 24">
         {icon.paths.map((d, i) => (
-          <path key={i} d={d} fill={icon.hex} />
+          <path key={i} d={d} fill={fill} />
         ))}
       </svg>
     );
@@ -339,7 +340,7 @@ function legendEntries(nodes: DiagramNode[]): LegendItem[] {
       const key = `tech:${n.tech!.toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ key, label: icon.title, kind: SHAPE_KIND[shape], color: icon.hex, paths: icon.paths });
+      out.push({ key, label: icon.title, kind: SHAPE_KIND[shape], color: onDark(icon.hex).iconFill, paths: icon.paths });
     } else if (shape === 'db' || shape === 'cache' || shape === 'queue') {
       const key = `shape:${shape}`;
       if (seen.has(key)) continue;
@@ -464,7 +465,8 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
           const isHot = hot.has(n.id);
           const shape: NodeShape = n.shape ?? 'service';
           const icon = getTechIcon(n.tech);
-          const accent = isHot ? C.hot : icon ? icon.hex : C.nodeBorder;
+          const brand = icon ? onDark(icon.hex) : null;
+          const accent = isHot ? C.hot : brand ? brand.accent : C.nodeBorder;
           const fill = isHot ? C.nodeFillHot : C.nodeFill;
           const sw = isHot ? 2.6 : 1.8;
           const X = cx(n);
