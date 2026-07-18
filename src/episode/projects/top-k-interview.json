@@ -1,0 +1,57 @@
+{
+  "slug": "top-k-interview",
+  "title": "Design Trending / Top-K",
+  "tagline": "A billion events a day, whiteboarded live",
+  "interviewPrompt": "For today's Software Engineer interview, find the top 10 trending hashtags in real time.",
+  "nodes": [
+    { "id": "stream", "label": "Event Stream", "sub": "1B / day", "x": 80, "y": 330, "shape": "queue", "tech": "apachekafka" },
+    { "id": "sketch", "label": "Count-Min Sketch", "sub": "KB, not GB", "x": 440, "y": 330, "shape": "component" },
+    { "id": "heap", "label": "Min-Heap", "sub": "current Top-K", "x": 820, "y": 330, "shape": "component" },
+    { "id": "result", "label": "Top 10", "sub": "real time", "x": 820, "y": 120, "shape": "service" },
+    { "id": "shard", "label": "Shard + Merge", "sub": "exact (alt)", "x": 440, "y": 540, "shape": "compute" }
+  ],
+  "edges": [
+    { "from": "stream", "to": "sketch", "label": "estimate freq" },
+    { "from": "sketch", "to": "heap", "label": "update" },
+    { "from": "heap", "to": "result", "label": "top 10" },
+    { "from": "stream", "to": "shard", "label": "exact path", "dashed": true },
+    { "from": "shard", "to": "result", "label": "merge heaps", "dashed": true }
+  ],
+  "beats": [
+    {
+      "interviewer": "For today's Software Engineer interview, find the top 10 trending hashtags out of a billion events a day, in real time.",
+      "interviewee": "Naive version first: count every hashtag in a big map, sort, and take the top 10.",
+      "show": "Naive: count everything in a map, sort, take the top 10.",
+      "visible": ["stream", "result"],
+      "highlight": ["stream"]
+    },
+    {
+      "interviewer": "Why doesn't that survive?",
+      "interviewee": "That map doesn't fit in memory at a billion distinct keys, and sorting on every read is dead on arrival.",
+      "show": "A billion keys won't fit in memory; sorting per read is dead on arrival.",
+      "visible": ["stream", "result"],
+      "highlight": ["stream", "result"]
+    },
+    {
+      "interviewer": "So what are you willing to give up?",
+      "interviewee": "Exactness. I need the top 10, approximately, right now. Once I'll accept approximate, the design opens up.",
+      "show": "Give up exactness: the top 10, approximate, right now.",
+      "visible": ["stream", "result"],
+      "highlight": ["result"]
+    },
+    {
+      "interviewer": "Show me.",
+      "interviewee": "A Count-Min Sketch, a fixed-size probabilistic counter that estimates frequency in kilobytes instead of gigabytes, paired with a small min-heap of the current top K. Stream the events off Kafka through the sketch and update the heap. Constant memory, constant update.",
+      "show": "Count-Min Sketch (KB) + a min-heap. Constant memory, constant update.",
+      "visible": ["stream", "sketch", "heap", "result"],
+      "highlight": ["sketch", "stream>sketch", "heap", "sketch>heap", "heap>result"]
+    },
+    {
+      "interviewer": "And if the business demanded exact counts?",
+      "interviewee": "Then you shard by hashtag and merge per-shard heaps, more infra for more accuracy. The sketch just trades a tiny over-count for fitting in RAM. Spotting that approximate is allowed is the thousand-x win.",
+      "show": "Exact = shard by hashtag + merge heaps. The sketch trades over-count for RAM.",
+      "visible": ["stream", "sketch", "heap", "result", "shard"],
+      "highlight": ["shard", "stream>shard", "shard>result"]
+    }
+  ]
+}

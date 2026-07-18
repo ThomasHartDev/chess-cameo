@@ -1,0 +1,50 @@
+{
+  "slug": "chat-system-interview",
+  "title": "Design a Chat System",
+  "tagline": "WhatsApp, whiteboarded live",
+  "interviewPrompt": "For today's Software Engineer interview, design a chat system like WhatsApp.",
+  "nodes": [
+    { "id": "clientA", "label": "Sender", "x": 80, "y": 330, "shape": "client" },
+    { "id": "chatSvr", "label": "Chat Server", "sub": "WebSocket", "x": 440, "y": 330, "shape": "service" },
+    { "id": "presence", "label": "Presence Map", "sub": "user → server", "x": 440, "y": 120, "shape": "cache", "tech": "redis" },
+    { "id": "inbox", "label": "Inbox Queue", "sub": "offline", "x": 820, "y": 540, "shape": "queue", "tech": "apachekafka" },
+    { "id": "clientB", "label": "Recipient", "x": 820, "y": 330, "shape": "client" }
+  ],
+  "edges": [
+    { "from": "clientA", "to": "chatSvr", "label": "WS send" },
+    { "from": "chatSvr", "to": "presence", "label": "which server?" },
+    { "from": "chatSvr", "to": "clientB", "label": "deliver (online)" },
+    { "from": "chatSvr", "to": "inbox", "label": "store (offline)" },
+    { "from": "inbox", "to": "clientB", "label": "on reconnect" }
+  ],
+  "beats": [
+    {
+      "interviewer": "For today's Software Engineer interview, design a chat system like WhatsApp.",
+      "interviewee": "Basic path, sending is easy: the client holds a WebSocket to a chat server, and the server routes each message to the recipient's connection.",
+      "show": "Send = a WebSocket to a chat server, routed to the recipient's socket.",
+      "visible": ["clientA", "chatSvr", "clientB"],
+      "highlight": ["clientA>chatSvr", "chatSvr>clientB"]
+    },
+    {
+      "interviewer": "So where's the actual hard part?",
+      "interviewee": "The recipient is offline half the time, and one server can't hold a socket to everyone. So I need to know which server holds their connection, and store the messages they haven't received.",
+      "show": "Hard part: route across servers, and deliver to people who are offline.",
+      "visible": ["clientA", "chatSvr", "clientB"],
+      "highlight": ["chatSvr"]
+    },
+    {
+      "interviewer": "Go deeper on that. How?",
+      "interviewee": "Keep a user-to-server map in Redis. On send, look up the recipient's server and forward. If they're offline, write the message to their inbox queue, something like Kafka, and deliver on reconnect.",
+      "show": "Presence map in Redis routes; offline messages queue in Kafka.",
+      "visible": ["clientA", "chatSvr", "presence", "inbox", "clientB"],
+      "highlight": ["presence", "chatSvr>presence", "inbox", "chatSvr>inbox", "inbox>clientB"]
+    },
+    {
+      "interviewer": "And group chat?",
+      "interviewee": "Same fan-out choice as a feed. Small groups, fan the message into each member's inbox. Huge groups, store once and pull on read. The real problem here is offline delivery and ordering, not the socket itself.",
+      "show": "Group = fan-out for small, pull-on-read for huge. Ordering is the real problem.",
+      "visible": ["clientA", "chatSvr", "presence", "inbox", "clientB"],
+      "highlight": ["inbox", "inbox>clientB"]
+    }
+  ]
+}

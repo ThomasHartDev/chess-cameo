@@ -1,15 +1,19 @@
-import { AbsoluteFill, Img } from 'remotion';
+import { AbsoluteFill } from 'remotion';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-jsx';
 import 'prismjs/components/prism-tsx';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-bash';
-import type { TVFrameProps, DiagramNode, CodeBlock } from '../src/episode/types';
+import type { TVFrameProps, DiagramNode, CodeBlock, NodeShape } from '../src/episode/types';
+import { getTechIcon, SHAPE_GLYPHS } from './diagram-icons';
 
-const BOX = { left: 60, top: 258, w: 1080, h: 640 }; // diagram area
-const NODE_W = 208;
-const NODE_H = 78;
+// The diagram now owns the full frame width (the chess board moved to its own image).
+// Node coords are authored in a local space; we fit them into this area at render time so
+// every topic centers and uses the freed space, no matter how its nodes are laid out.
+const AREA = { left: 96, right: 1824, top: 316, bottom: 872 };
+const NODE_W = 250;
+const NODE_H = 104;
 
 const C = {
   bg: '#0d1117',
@@ -34,9 +38,9 @@ export const DEFAULT_TV_PROPS: TVFrameProps = {
   topicTitle: 'Designing a URL Shortener',
   tagline: 'How a long link becomes something tiny',
   nodes: [
-    { id: 'a', label: 'Client', x: 80, y: 340 },
-    { id: 'b', label: 'API', sub: 'shorten service', x: 430, y: 340 },
-    { id: 'c', label: 'KV Store', sub: 'code → url', x: 800, y: 340 },
+    { id: 'a', label: 'Client', x: 80, y: 340, shape: 'client' },
+    { id: 'b', label: 'API', sub: 'shorten service', x: 430, y: 340, shape: 'service' },
+    { id: 'c', label: 'KV Store', sub: 'code → url', x: 800, y: 340, shape: 'db', tech: 'amazondynamodb' },
   ],
   edges: [
     { from: 'a', to: 'b' },
@@ -157,12 +161,209 @@ function nodeMap(nodes: DiagramNode[]): Record<string, DiagramNode> {
   return Object.fromEntries(nodes.map((n) => [n.id, n]));
 }
 
+// ── Node shapes ───────────────────────────────────────────────────────────────
+// Every shape draws inside a NODE_W × NODE_H box centered on (x, y). Cylinders are
+// stores (db/cache); queue is a rect with an open right end; the rest are rounded
+// rects. `accent` is the border/glyph color (brand hex, or amber when highlighted).
+
+interface ShapeProps {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fill: string;
+  accent: string;
+  sw: number;
+}
+
+function RoundedRect({ x, y, w, h, fill, accent, sw }: ShapeProps) {
+  return (
+    <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={18} fill={fill} stroke={accent} strokeWidth={sw} />
+  );
+}
+
+// Databases are ALWAYS cylinders. `capFill` lets a cache tint its top ellipse.
+function Cylinder({ x, y, w, h, fill, accent, sw, capFill }: ShapeProps & { capFill?: string }) {
+  const rx = w / 2;
+  const ry = h * 0.16;
+  const topCY = y - h / 2 + ry;
+  const botCY = y + h / 2 - ry;
+  const body = `M ${x - rx} ${topCY} L ${x - rx} ${botCY} A ${rx} ${ry} 0 0 0 ${x + rx} ${botCY} L ${x + rx} ${topCY} Z`;
+  return (
+    <g>
+      <path d={body} fill={fill} stroke="none" />
+      <path
+        d={`M ${x - rx} ${topCY} L ${x - rx} ${botCY} A ${rx} ${ry} 0 0 0 ${x + rx} ${botCY} L ${x + rx} ${topCY}`}
+        fill="none"
+        stroke={accent}
+        strokeWidth={sw}
+      />
+      <ellipse cx={x} cy={topCY} rx={rx} ry={ry} fill={capFill ?? '#1d2531'} stroke={accent} strokeWidth={sw} />
+    </g>
+  );
+}
+
+// A queue/stream: rounded rect with an OPEN (dashed) right end, like a pipe.
+function QueueBox({ x, y, w, h, fill, accent, sw }: ShapeProps) {
+  const left = x - w / 2;
+  const right = x + w / 2;
+  const top = y - h / 2;
+  const bot = y + h / 2;
+  return (
+    <g>
+      <rect x={left} y={top} width={w} height={h} rx={10} fill={fill} />
+      <path d={`M ${right} ${top} L ${left} ${top} L ${left} ${bot} L ${right} ${bot}`} fill="none" stroke={accent} strokeWidth={sw} />
+      <line x1={right} y1={top} x2={right} y2={bot} stroke={accent} strokeWidth={sw} strokeDasharray="5 7" opacity={0.65} />
+    </g>
+  );
+}
+
+function NodeBackground(props: ShapeProps & { shape: NodeShape; redisRed?: string }) {
+  switch (props.shape) {
+    case 'db':
+      return <Cylinder {...props} />;
+    case 'cache':
+      return <Cylinder {...props} capFill={props.redisRed ?? '#FF4438'} />;
+    case 'queue':
+      return <QueueBox {...props} />;
+    default:
+      return <RoundedRect {...props} />;
+  }
+}
+
+const ICON_PX = 30; // rendered icon edge
+
+// Brand icon (top-left) when `tech` resolves, else the neutral shape glyph.
+function NodeIcon({
+  x,
+  y,
+  w,
+  h,
+  tech,
+  shape,
+  neutral,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  tech?: string;
+  shape: NodeShape;
+  neutral: string;
+}) {
+  const icon = getTechIcon(tech);
+  const ix = x - w / 2 + 16;
+  const iy = y - h / 2 + 12;
+  if (icon) {
+    return (
+      <svg x={ix} y={iy} width={ICON_PX} height={ICON_PX} viewBox="0 0 24 24">
+        {icon.paths.map((d, i) => (
+          <path key={i} d={d} fill={icon.hex} />
+        ))}
+      </svg>
+    );
+  }
+  const glyph = SHAPE_GLYPHS[shape];
+  if (!glyph) return null;
+  return (
+    <svg x={ix} y={iy} width={ICON_PX} height={ICON_PX} viewBox="0 0 24 24">
+      {glyph.map((d, i) => (
+        <path key={i} d={d} fill={neutral} opacity={0.85} />
+      ))}
+    </svg>
+  );
+}
+
+/** Fit authored node coords into AREA so every topic centers and uses the full width. */
+function makeProjector(nodes: DiagramNode[]) {
+  const xs = nodes.map((n) => n.x);
+  const ys = nodes.map((n) => n.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const padX = NODE_W / 2 + 28;
+  const padY = NODE_H / 2 + 28;
+  const availW = AREA.right - AREA.left - 2 * padX;
+  const availH = AREA.bottom - AREA.top - 2 * padY;
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  // Independent x/y scaling spreads columns into the freed width; caps stop a single
+  // row/column (span ~0) from exploding.
+  const scaleX = Math.min(availW / spanX, 2.4);
+  const scaleY = Math.min(availH / spanY, 1.6);
+  const cX = (minX + maxX) / 2;
+  const cY = (minY + maxY) / 2;
+  const areaCX = (AREA.left + AREA.right) / 2;
+  const areaCY = (AREA.top + AREA.bottom) / 2;
+  return {
+    px: (n: DiagramNode) => areaCX + (n.x - cX) * scaleX,
+    py: (n: DiagramNode) => areaCY + (n.y - cY) * scaleY,
+  };
+}
+
+// A generic cylinder mark for a store node that carries no brand icon.
+const DB_GLYPH = ['M3 6c0-1.7 4-3 9-3s9 1.3 9 3-4 3-9 3-9-1.3-9-3z', 'M3 6v12c0 1.7 4 3 9 3s9-1.3 9-3V6c0 1.7-4 3-9 3S3 7.7 3 6z'];
+
+const SHAPE_KIND: Record<NodeShape, string> = {
+  db: 'database',
+  cache: 'cache',
+  queue: 'queue',
+  client: 'client',
+  compute: 'worker',
+  component: 'data structure',
+  service: 'service',
+};
+
+interface LegendItem {
+  key: string;
+  label: string;
+  kind: string;
+  color: string;
+  paths: string[];
+}
+
+/**
+ * Build the legend from the nodes actually in the episode. One chip per distinct tech,
+ * plus one per distinct store/queue shape that has no brand icon, so a viewer can tell a
+ * Redis cylinder from a DynamoDB cylinder without guessing. Plain service/client/compute
+ * nodes are self-evident and stay out of the legend.
+ */
+function legendEntries(nodes: DiagramNode[]): LegendItem[] {
+  const out: LegendItem[] = [];
+  const seen = new Set<string>();
+  for (const n of nodes) {
+    const shape: NodeShape = n.shape ?? 'service';
+    const icon = getTechIcon(n.tech);
+    if (icon) {
+      const key = `tech:${n.tech!.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ key, label: icon.title, kind: SHAPE_KIND[shape], color: icon.hex, paths: icon.paths });
+    } else if (shape === 'db' || shape === 'cache' || shape === 'queue') {
+      const key = `shape:${shape}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        key,
+        label: n.label,
+        kind: SHAPE_KIND[shape],
+        color: '#8b98a5',
+        paths: shape === 'queue' ? (SHAPE_GLYPHS.queue ?? []) : DB_GLYPH,
+      });
+    }
+  }
+  return out;
+}
+
 export const TVFrame: React.FC<TVFrameProps> = (p) => {
   const nm = nodeMap(p.nodes);
   const vis = new Set(p.visible);
   const hot = new Set(p.highlight ?? []);
-  const cx = (n: DiagramNode) => BOX.left + n.x;
-  const cy = (n: DiagramNode) => BOX.top + n.y;
+  const proj = makeProjector(p.nodes);
+  const cx = (n: DiagramNode) => proj.px(n);
+  const cy = (n: DiagramNode) => proj.py(n);
+  const legend = legendEntries(p.nodes);
 
   return (
     <AbsoluteFill
@@ -261,32 +462,36 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
         {p.nodes.map((n) => {
           if (!vis.has(n.id)) return null;
           const isHot = hot.has(n.id);
-          const x = cx(n) - NODE_W / 2;
-          const y = cy(n) - NODE_H / 2;
+          const shape: NodeShape = n.shape ?? 'service';
+          const icon = getTechIcon(n.tech);
+          const accent = isHot ? C.hot : icon ? icon.hex : C.nodeBorder;
+          const fill = isHot ? C.nodeFillHot : C.nodeFill;
+          const sw = isHot ? 2.6 : 1.8;
+          const X = cx(n);
+          const Y = cy(n);
+          // Cylinders push their text below the top cap so it sits in the body.
+          const isCyl = shape === 'db' || shape === 'cache';
+          const textDy = isCyl ? NODE_H * 0.12 : 0;
+          const labelY = (n.sub ? Y - 6 : Y + 7) + textDy;
           return (
             <g key={n.id}>
-              <rect
-                x={x}
-                y={y}
-                width={NODE_W}
-                height={NODE_H}
-                rx={14}
-                fill={isHot ? C.nodeFillHot : C.nodeFill}
-                stroke={isHot ? C.hot : C.nodeBorder}
-                strokeWidth={isHot ? 2.4 : 1.5}
+              <NodeBackground
+                shape={shape}
+                x={X}
+                y={Y}
+                w={NODE_W}
+                h={NODE_H}
+                fill={fill}
+                accent={accent}
+                sw={sw}
+                redisRed={icon ? icon.hex : undefined}
               />
-              <text
-                x={cx(n)}
-                y={n.sub ? cy(n) - 6 : cy(n) + 7}
-                fill={C.label}
-                fontSize={22}
-                fontWeight={700}
-                textAnchor="middle"
-              >
+              <NodeIcon x={X} y={Y} w={NODE_W} h={NODE_H} tech={n.tech} shape={shape} neutral={C.sub} />
+              <text x={X} y={labelY} fill={C.label} fontSize={24} fontWeight={700} textAnchor="middle">
                 {n.label}
               </text>
               {n.sub ? (
-                <text x={cx(n)} y={cy(n) + 20} fill={C.sub} fontSize={15} textAnchor="middle">
+                <text x={X} y={labelY + 26} fill={C.sub} fontSize={16} textAnchor="middle">
                   {n.sub}
                 </text>
               ) : null}
@@ -296,31 +501,44 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
       </svg>
       )}
 
-      {/* Chess cameo */}
-      <div style={{ position: 'absolute', right: 60, top: 232, width: 560 }}>
+      {/* Legend: only the tech/shapes this episode actually uses. */}
+      {!p.code && legend.length > 0 ? (
         <div
           style={{
+            position: 'absolute',
+            left: 60,
+            bottom: 172,
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            marginBottom: 12,
+            gap: 10,
+            flexWrap: 'wrap',
+            maxWidth: 1400,
+            alignItems: 'center',
           }}
         >
-          <span style={{ color: C.eyebrow, fontSize: 17, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700 }}>
-            Game progress
-          </span>
-          <span style={{ color: C.hot, fontSize: 30, fontWeight: 800 }}>{Math.round(p.gamePct)}%</span>
+          {legend.map((item) => (
+            <div
+              key={item.key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '5px 12px 5px 8px',
+                background: 'rgba(22,27,34,0.72)',
+                border: `1px solid ${C.nodeBorder}`,
+                borderRadius: 9,
+              }}
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" style={{ flex: '0 0 18px' }}>
+                {item.paths.map((d, i) => (
+                  <path key={i} d={d} fill={item.color} />
+                ))}
+              </svg>
+              <span style={{ color: C.label, fontSize: 15, fontWeight: 600 }}>{item.label}</span>
+              <span style={{ color: C.sub, fontSize: 15 }}>· {item.kind}</span>
+            </div>
+          ))}
         </div>
-        {p.chessDataUri ? (
-          <Img
-            src={p.chessDataUri}
-            style={{ width: 560, height: 560, borderRadius: 12, border: `1px solid ${C.nodeBorder}` }}
-          />
-        ) : (
-          <div style={{ width: 560, height: 560, borderRadius: 12, border: `1px solid ${C.nodeBorder}` }} />
-        )}
-        <div style={{ color: C.sub, fontSize: 20, marginTop: 12, textAlign: 'center' }}>{p.gameCaption}</div>
-      </div>
+      ) : null}
 
       {/* Beat progress dots */}
       <div style={{ position: 'absolute', left: 60, top: 210, display: 'flex', gap: 8 }}>
