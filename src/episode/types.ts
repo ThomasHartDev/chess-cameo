@@ -1,11 +1,27 @@
 // Shared shapes between the episode generator and the Remotion TVFrame component.
 
+/**
+ * The visual shape a node renders as. Conventions that are always followed:
+ * db/cache are cylinders (stores), queue is a rectangle with a message glyph,
+ * client/compute/component/service are rounded rects with distinguishing glyphs.
+ * See docs/diagram-conventions.md.
+ */
+export type NodeShape = 'service' | 'db' | 'cache' | 'queue' | 'client' | 'compute' | 'component';
+
 export interface DiagramNode {
   id: string;
   label: string;
   sub?: string;
   x: number; // local diagram coords (0..1140)
   y: number; // local diagram coords (0..760)
+  /** Visual shape. Defaults to 'service' (a plain rounded rect). */
+  shape?: NodeShape;
+  /**
+   * Brand slug for a tech icon rendered top-left, tinting the node accent with the
+   * brand color. e.g. 'redis', 'postgresql', 'amazondynamodb', 'apachekafka'.
+   * Unknown slugs fall back to no icon (never crash). See remotion/diagram-icons.ts.
+   */
+  tech?: string;
 }
 
 export interface DiagramEdge {

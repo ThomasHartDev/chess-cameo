@@ -1,0 +1,56 @@
+{
+  "slug": "url-shortener-interview",
+  "title": "Design a URL Shortener",
+  "tagline": "Software Engineer interview, whiteboarded live",
+  "interviewPrompt": "For today's Software Engineer interview, design a URL shortener.",
+  "nodes": [
+    { "id": "client", "label": "Client", "x": 80, "y": 330, "shape": "client" },
+    { "id": "api", "label": "API", "sub": "shorten + resolve", "x": 440, "y": 330, "shape": "service" },
+    { "id": "idgen", "label": "ID Gen", "sub": "counter → base62", "x": 440, "y": 120, "shape": "component" },
+    { "id": "kv", "label": "KV Store", "sub": "code → url", "x": 820, "y": 330, "shape": "db", "tech": "amazondynamodb" },
+    { "id": "cache", "label": "Cache", "sub": "hot links", "x": 820, "y": 120, "shape": "cache", "tech": "redis" }
+  ],
+  "edges": [
+    { "from": "client", "to": "api", "label": "GET /abc" },
+    { "from": "idgen", "to": "api", "dashed": true },
+    { "from": "api", "to": "kv", "label": "code → url" },
+    { "from": "api", "to": "cache", "label": "read-through", "dashed": true }
+  ],
+  "beats": [
+    {
+      "interviewer": "For today's Software Engineer interview, design a URL shortener.",
+      "interviewee": "High level, three moves: take a long URL, hand back a short code, and redirect on lookup. Simplest version, hash the URL, store the code-to-URL mapping in a key-value store, and redirect on the way back.",
+      "show": "A short link is just a lookup: code in, long URL out.",
+      "visible": ["client", "api", "kv"],
+      "highlight": ["client>api", "api>kv"]
+    },
+    {
+      "interviewer": "Say it gets popular. What breaks first?",
+      "interviewee": "Two things. A hash like MD5 is too long, and if I truncate it, it collides. And at a few thousand writes a second, that single row insert on the hot path becomes the ceiling.",
+      "show": "Hash is too long, truncating collides, and the write is the bottleneck.",
+      "visible": ["client", "api", "kv"],
+      "highlight": ["kv", "api>kv"]
+    },
+    {
+      "interviewer": "Let's go deeper on the code generation. Fix it.",
+      "interviewee": "Don't hash at all. Hand out a unique 64-bit ID from a counter, then base62-encode it. Seven characters gives 3.5 trillion links, and now the redirect is a single key lookup.",
+      "show": "Counter → base62. Seven chars = 3.5 trillion links.",
+      "visible": ["client", "api", "idgen", "kv"],
+      "highlight": ["idgen", "idgen>api"]
+    },
+    {
+      "interviewer": "Is a central counter the only option?",
+      "interviewee": "No, and that's the real tradeoff. Want codes unguessable? Add a salt or a Hashids permutation. Can't tolerate a central counter? Pre-allocate ID ranges per server.",
+      "show": "Not the only way: salt for privacy, or pre-allocate ID ranges per server.",
+      "visible": ["client", "api", "idgen", "kv"],
+      "highlight": ["idgen"]
+    },
+    {
+      "interviewer": "And the read path?",
+      "interviewee": "Reads beat writes about 100 to 1, so the whole job is making that redirect a cache hit. Keep the mapping in a key-value store like DynamoDB, and cache the hot links in Redis so the hot path never touches it.",
+      "show": "Reads ≫ writes. Mapping in DynamoDB, hot links cached in Redis.",
+      "visible": ["client", "api", "idgen", "kv", "cache"],
+      "highlight": ["cache", "api>cache", "client>api"]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "slug": "rate-limiter-interview",
+  "title": "Design a Rate Limiter",
+  "tagline": "Software Engineer interview, whiteboarded live",
+  "interviewPrompt": "For today's Software Engineer interview, design a rate limiter.",
+  "nodes": [
+    { "id": "client", "label": "Client", "x": 80, "y": 330, "shape": "client" },
+    { "id": "gw", "label": "Gateway", "sub": "check limit", "x": 440, "y": 330, "shape": "service" },
+    { "id": "limiter", "label": "Token Bucket", "sub": "per user", "x": 440, "y": 120, "shape": "component" },
+    { "id": "redis", "label": "Redis", "sub": "shared counters", "x": 820, "y": 120, "shape": "cache", "tech": "redis" },
+    { "id": "svc", "label": "Service", "sub": "token left", "x": 820, "y": 330, "shape": "service" },
+    { "id": "reject", "label": "429", "sub": "bucket empty", "x": 820, "y": 540, "shape": "service" }
+  ],
+  "edges": [
+    { "from": "client", "to": "gw" },
+    { "from": "gw", "to": "limiter" },
+    { "from": "limiter", "to": "redis", "label": "atomic incr" },
+    { "from": "gw", "to": "svc", "label": "allow" },
+    { "from": "gw", "to": "reject", "label": "deny" }
+  ],
+  "beats": [
+    {
+      "interviewer": "For today's Software Engineer interview, design a rate limiter. Say 100 requests per user per minute.",
+      "interviewee": "Basic version, keep a counter per user and reset it every minute.",
+      "show": "Naive: a per-user counter that resets each minute.",
+      "visible": ["client", "gw", "limiter"],
+      "highlight": ["limiter", "gw>limiter"]
+    },
+    {
+      "interviewer": "Where does that bite you?",
+      "interviewee": "At the boundary. A user sends 100 requests at 0:59 and another 100 at 1:00, so 200 in two seconds, all technically legal. That's the fixed-window burst bug.",
+      "show": "Fixed-window burst: 200 requests across the minute boundary, all 'legal'.",
+      "visible": ["client", "gw", "limiter"],
+      "highlight": ["limiter"]
+    },
+    {
+      "interviewer": "So go deeper. What do you use instead?",
+      "interviewee": "A token bucket. It refills at a steady rate, one token per request, so bursts are bounded by bucket size, not the clock. And the counter lives in Redis so every server behind the load balancer shares it.",
+      "show": "Token bucket refills steadily; counters in Redis so all servers agree.",
+      "visible": ["client", "gw", "limiter", "redis"],
+      "highlight": ["limiter", "redis", "limiter>redis"]
+    },
+    {
+      "interviewer": "What happens per request?",
+      "interviewee": "Token left in the bucket, the request passes through to the service. Bucket empty, return a 429 with a Retry-After so well-behaved clients back off.",
+      "show": "Token left → pass to service. Empty → 429 + Retry-After.",
+      "visible": ["client", "gw", "limiter", "redis", "svc", "reject"],
+      "highlight": ["svc", "gw>svc", "reject", "gw>reject"]
+    },
+    {
+      "interviewer": "Any tradeoff between the algorithms?",
+      "interviewee": "Fixed-window is cheapest if a little burst is fine. Sliding-window-log is the most accurate but stores every timestamp, so more memory. Token bucket is the middle. The senior detail is doing the check atomically, a Redis Lua script, so two servers can't both read-then-write the same counter.",
+      "show": "Fixed vs sliding-log vs token bucket. Do the check atomically (Lua).",
+      "visible": ["client", "gw", "limiter", "redis", "svc", "reject"],
+      "highlight": ["redis", "limiter>redis"]
+    }
+  ]
+}

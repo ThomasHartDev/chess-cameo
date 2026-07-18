@@ -1,0 +1,58 @@
+{
+  "slug": "news-feed-interview",
+  "title": "Design a News Feed",
+  "tagline": "The celebrity problem, whiteboarded live",
+  "interviewPrompt": "For today's Software Engineer interview, design a news feed.",
+  "nodes": [
+    { "id": "poster", "label": "Post", "sub": "a user posts", "x": 80, "y": 330, "shape": "client" },
+    { "id": "fanout", "label": "Fan-out", "sub": "on write", "x": 440, "y": 330, "shape": "compute" },
+    { "id": "feedCache", "label": "Feed Cache", "sub": "per follower", "x": 820, "y": 330, "shape": "cache", "tech": "redis" },
+    { "id": "reader", "label": "Home Timeline", "sub": "one lookup", "x": 820, "y": 540, "shape": "client" },
+    { "id": "celeb", "label": "Celebrity", "sub": "50M followers", "x": 80, "y": 120, "shape": "client" },
+    { "id": "merge", "label": "Merge", "sub": "at read time", "x": 440, "y": 120, "shape": "compute" }
+  ],
+  "edges": [
+    { "from": "poster", "to": "fanout", "label": "on write" },
+    { "from": "fanout", "to": "feedCache", "label": "copy to followers" },
+    { "from": "reader", "to": "feedCache", "label": "read" },
+    { "from": "celeb", "to": "merge", "label": "skip fan-out" },
+    { "from": "merge", "to": "reader", "label": "merge in" }
+  ],
+  "beats": [
+    {
+      "interviewer": "For today's Software Engineer interview, design a news feed.",
+      "interviewee": "High level, two ways to build the timeline. Fan-out on write: when you post, copy it into every follower's feed cache, kept in Redis. Or fan-out on read: build the feed when someone opens the app.",
+      "show": "Two options: fan-out on write vs fan-out on read.",
+      "visible": ["poster", "fanout", "feedCache", "reader"],
+      "highlight": ["poster>fanout", "fanout>feedCache"]
+    },
+    {
+      "interviewer": "Pick one and defend it.",
+      "interviewee": "Fan-out on write is great for reads, one lookup. But it breaks the moment you have a celebrity, because one post is 50 million writes.",
+      "show": "Write fan-out = one-lookup reads, but a celebrity is 50M writes.",
+      "visible": ["poster", "fanout", "feedCache", "reader", "celeb"],
+      "highlight": ["reader>feedCache", "celeb"]
+    },
+    {
+      "interviewer": "So dig into that celebrity case. What do you do?",
+      "interviewee": "You do both. Fan-out on write for normal users, and for the handful of mega-accounts, skip the fan-out and merge their posts in at read time.",
+      "show": "Hybrid: precompute normal users, merge celebrity posts at read time.",
+      "visible": ["poster", "fanout", "feedCache", "reader", "celeb", "merge"],
+      "highlight": ["celeb>merge", "merge>reader"]
+    },
+    {
+      "interviewer": "Anything else you'd tune?",
+      "interviewee": "Gate the fan-out on whether a follower is actually active, so you're not precomputing feeds for accounts that never open the app, which is most of them.",
+      "show": "Only fan out to active followers; skip dormant accounts.",
+      "visible": ["poster", "fanout", "feedCache", "reader", "celeb", "merge"],
+      "highlight": ["fanout", "fanout>feedCache"]
+    },
+    {
+      "interviewer": "Sum it up.",
+      "interviewee": "The whole trick is precompute the common path, and compute the expensive path on demand.",
+      "show": "Precompute the common path; compute the expensive path lazily.",
+      "visible": ["poster", "fanout", "feedCache", "reader", "celeb", "merge"],
+      "highlight": ["feedCache", "merge"]
+    }
+  ]
+}
