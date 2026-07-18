@@ -357,6 +357,73 @@ function legendEntries(nodes: DiagramNode[]): LegendItem[] {
   return out;
 }
 
+interface EdgeLabelInput {
+  key: number;
+  text: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+interface EdgeLabelPos {
+  key: number;
+  text: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * Place edge labels so they sit just off their edge and don't overprint each other.
+ * Each label starts at its edge midpoint pushed a fixed distance along the perpendicular
+ * (biased upward for readability), then a few relaxation passes nudge any overlapping pair
+ * apart vertically. General for every topic — two edges sharing a midpoint (top-k's
+ * `update` / `merge heaps`) no longer collide.
+ */
+function layoutEdgeLabels(items: EdgeLabelInput[]): EdgeLabelPos[] {
+  const OFF = 17; // perpendicular offset off the line
+  const CHAR_W = 8.2; // ~advance per char at fontSize 16
+  const LINE_H = 24;
+  const placed = items.map((it) => {
+    const mx = (it.x1 + it.x2) / 2;
+    const my = (it.y1 + it.y2) / 2;
+    const dx = it.x2 - it.x1;
+    const dy = it.y2 - it.y1;
+    const len = Math.hypot(dx, dy) || 1;
+    let px = -dy / len;
+    let py = dx / len;
+    if (py > 0) {
+      px = -px;
+      py = -py;
+    } // bias the offset upward
+    return { key: it.key, text: it.text, x: mx + px * OFF, y: my + py * OFF, half: (it.text.length * CHAR_W) / 2 };
+  });
+  for (let iter = 0; iter < 8; iter++) {
+    let moved = false;
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const a = placed[i];
+        const b = placed[j];
+        const overlapX = a.half + b.half + 8 - Math.abs(a.x - b.x);
+        const overlapY = LINE_H - Math.abs(a.y - b.y);
+        if (overlapX > 0 && overlapY > 0) {
+          const push = overlapY / 2 + 2;
+          if (a.y <= b.y) {
+            a.y -= push;
+            b.y += push;
+          } else {
+            a.y += push;
+            b.y -= push;
+          }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return placed.map(({ key, text, x, y }) => ({ key, text, x, y }));
+}
+
 export const TVFrame: React.FC<TVFrameProps> = (p) => {
   const nm = nodeMap(p.nodes);
   const vis = new Set(p.visible);
@@ -365,6 +432,18 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
   const cx = (n: DiagramNode) => proj.px(n);
   const cy = (n: DiagramNode) => proj.py(n);
   const legend = legendEntries(p.nodes);
+
+  // Pre-place edge labels once (perpendicular offset + de-collision) so they never overprint.
+  const edgeLabels = layoutEdgeLabels(
+    p.edges
+      .map((e, i) => {
+        const a = nm[e.from];
+        const b = nm[e.to];
+        if (!e.label || !a || !b || !vis.has(e.from) || !vis.has(e.to)) return null;
+        return { key: i, text: e.label, x1: cx(a), y1: cy(a), x2: cx(b), y2: cy(b) };
+      })
+      .filter((x): x is EdgeLabelInput => x !== null),
+  );
 
   return (
     <AbsoluteFill
@@ -446,20 +525,15 @@ export const TVFrame: React.FC<TVFrameProps> = (p) => {
                 strokeDasharray={e.dashed ? '7 7' : undefined}
                 markerEnd={`url(#${isHot ? 'arrowHot' : 'arrow'})`}
               />
-              {e.label ? (
-                <text
-                  x={(x1 + x2) / 2}
-                  y={(y1 + y2) / 2 - 10}
-                  fill={C.sub}
-                  fontSize={16}
-                  textAnchor="middle"
-                >
-                  {e.label}
-                </text>
-              ) : null}
             </g>
           );
         })}
+        {/* Edge labels, pre-placed so they sit off the line and never overprint. */}
+        {edgeLabels.map((l) => (
+          <text key={l.key} x={l.x} y={l.y} fill={C.sub} fontSize={16} textAnchor="middle">
+            {l.text}
+          </text>
+        ))}
         {p.nodes.map((n) => {
           if (!vis.has(n.id)) return null;
           const isHot = hot.has(n.id);
