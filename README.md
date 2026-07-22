@@ -85,6 +85,16 @@ Each episode lands in `out/episodes/<date>/` with `script.md`, `frames/beat-NN.p
 `chess/beat-NN.png`, and `episode.json`. Topics live in `src/episode/topics.ts`; the frame layout
 is `remotion/TVFrame.tsx`. See the `system-design-cast` skill for the full workflow.
 
+## Stack
+
+- TypeScript, run with `tsx`
+- `chess.js` for PGN parsing and board replay
+- `@resvg/resvg-js` to rasterize the SVG board to PNG (public-domain Cburnett piece set)
+- Remotion + React for the 1920x1080 episode TV frames
+- `@thomashartdev/image-processing` for frame optimization
+- chess.com Published-Data API as the game source (public, no auth)
+- Vitest for tests
+
 ## Library use
 
 ```ts
