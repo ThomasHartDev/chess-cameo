@@ -4,6 +4,13 @@ Turn a real chess.com game into a board you can drop into a video series, one fr
 percentage of the game. Give it a percentage (0–100) and it renders the exact position the
 game was in at that point. Progress the same game across a run of videos as a recurring cameo.
 
+## Interview diagrams (Complete-System Law)
+
+Film / system-design episodes follow the **Arjay complete-system pattern**: every diagram beat
+is a full working system end-to-end. Naive complete first, then interviewer pressure adds or
+reworks pieces. **Never** progressive-reveal fragments. Law: [`docs/complete-system-law.md`](docs/complete-system-law.md).
+Enforced in `src/episode/validate.ts`.
+
 ## How the percentage maps to a position
 
 A game is a list of half-moves (plies). `chess-cameo` replays the PGN and records the board
