@@ -6,7 +6,7 @@
   "nodes": [
     { "id": "client", "label": "Client", "x": 80, "y": 330, "shape": "client" },
     { "id": "gw", "label": "Gateway", "sub": "check limit", "x": 440, "y": 330, "shape": "service" },
-    { "id": "limiter", "label": "Token Bucket", "sub": "per user", "x": 440, "y": 120, "shape": "component" },
+    { "id": "limiter", "label": "Limiter", "sub": "per user", "x": 440, "y": 120, "shape": "component" },
     { "id": "redis", "label": "Redis", "sub": "shared counters", "x": 820, "y": 120, "shape": "cache", "tech": "redis" },
     { "id": "svc", "label": "Service", "sub": "token left", "x": 820, "y": 330, "shape": "service" },
     { "id": "reject", "label": "429", "sub": "bucket empty", "x": 820, "y": 540, "shape": "service" }
@@ -21,36 +21,36 @@
   "beats": [
     {
       "interviewer": "For today's Software Engineer interview, design a rate limiter. Say 100 requests per user per minute.",
-      "interviewee": "Basic version, keep a counter per user and reset it every minute.",
-      "show": "Naive: a per-user counter that resets each minute.",
-      "visible": ["client", "gw", "limiter"],
-      "highlight": ["limiter", "gw>limiter"]
+      "interviewee": "Complete naive system: gateway checks an in-memory per-user counter, then either forwards to the service or returns 429. Full allow and deny path from beat one.",
+      "show": "Naive complete: Client → Gateway → Service / 429.",
+      "visible": ["client", "gw", "limiter", "svc", "reject"],
+      "highlight": ["limiter", "gw>svc", "gw>reject"]
     },
     {
       "interviewer": "Where does that bite you?",
-      "interviewee": "At the boundary. A user sends 100 requests at 0:59 and another 100 at 1:00, so 200 in two seconds, all technically legal. That's the fixed-window burst bug.",
-      "show": "Fixed-window burst: 200 requests across the minute boundary, all 'legal'.",
-      "visible": ["client", "gw", "limiter"],
+      "interviewee": "Same full path. Fixed-window burst: 100 at 0:59 and 100 at 1:00, all legal, 200 in two seconds.",
+      "show": "Same complete path. Fixed-window burst is the bug.",
+      "visible": ["client", "gw", "limiter", "svc", "reject"],
       "highlight": ["limiter"]
     },
     {
       "interviewer": "So go deeper. What do you use instead?",
-      "interviewee": "A token bucket. It refills at a steady rate, one token per request, so bursts are bounded by bucket size, not the clock. And the counter lives in Redis so every server behind the load balancer shares it.",
-      "show": "Token bucket refills steadily; counters in Redis so all servers agree.",
-      "visible": ["client", "gw", "limiter", "redis"],
+      "interviewee": "Rework the counter to a token bucket, and put it in Redis so every server shares state. Allow and deny exits stay wired.",
+      "show": "Rework: token bucket + Redis. Full allow/deny still complete.",
+      "visible": ["client", "gw", "limiter", "redis", "svc", "reject"],
       "highlight": ["limiter", "redis", "limiter>redis"]
     },
     {
       "interviewer": "What happens per request?",
-      "interviewee": "Token left in the bucket, the request passes through to the service. Bucket empty, return a 429 with a Retry-After so well-behaved clients back off.",
-      "show": "Token left → pass to service. Empty → 429 + Retry-After.",
+      "interviewee": "Walk both exits on the full system: token left, pass to service. Bucket empty, 429 with Retry-After.",
+      "show": "Full path both ways: allow → Service, deny → 429.",
       "visible": ["client", "gw", "limiter", "redis", "svc", "reject"],
       "highlight": ["svc", "gw>svc", "reject", "gw>reject"]
     },
     {
       "interviewer": "Any tradeoff between the algorithms?",
-      "interviewee": "Fixed-window is cheapest if a little burst is fine. Sliding-window-log is the most accurate but stores every timestamp, so more memory. Token bucket is the middle. The senior detail is doing the check atomically, a Redis Lua script, so two servers can't both read-then-write the same counter.",
-      "show": "Fixed vs sliding-log vs token bucket. Do the check atomically (Lua).",
+      "interviewee": "Fixed-window is cheapest, sliding-log is exact, token bucket is the middle. Senior detail on this complete system: atomic Redis Lua so two servers cannot both admit.",
+      "show": "Same complete system. Atomic Lua check is the senior detail.",
       "visible": ["client", "gw", "limiter", "redis", "svc", "reject"],
       "highlight": ["redis", "limiter>redis"]
     }

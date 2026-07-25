@@ -8,43 +8,45 @@
     { "id": "chatSvr", "label": "Chat Server", "sub": "WebSocket", "x": 440, "y": 330, "shape": "service" },
     { "id": "presence", "label": "Presence Map", "sub": "user → server", "x": 440, "y": 120, "shape": "cache", "tech": "redis" },
     { "id": "inbox", "label": "Inbox Queue", "sub": "offline", "x": 820, "y": 540, "shape": "queue", "tech": "apachekafka" },
-    { "id": "clientB", "label": "Recipient", "x": 820, "y": 330, "shape": "client" }
+    { "id": "clientB", "label": "Recipient", "x": 820, "y": 330, "shape": "client" },
+    { "id": "store", "label": "History", "sub": "persist first", "x": 820, "y": 120, "shape": "db", "tech": "postgresql" }
   ],
   "edges": [
     { "from": "clientA", "to": "chatSvr", "label": "WS send" },
     { "from": "chatSvr", "to": "presence", "label": "which server?" },
     { "from": "chatSvr", "to": "clientB", "label": "deliver (online)" },
     { "from": "chatSvr", "to": "inbox", "label": "store (offline)" },
-    { "from": "inbox", "to": "clientB", "label": "on reconnect" }
+    { "from": "inbox", "to": "clientB", "label": "on reconnect" },
+    { "from": "chatSvr", "to": "store", "label": "persist" }
   ],
   "beats": [
     {
       "interviewer": "For today's Software Engineer interview, design a chat system like WhatsApp.",
-      "interviewee": "Basic path, sending is easy: the client holds a WebSocket to a chat server, and the server routes each message to the recipient's connection.",
-      "show": "Send = a WebSocket to a chat server, routed to the recipient's socket.",
+      "interviewee": "Complete online path first: sender WebSocket to a chat server, server routes to the recipient's open socket. Works when both are online on one box.",
+      "show": "Naive complete online: Sender → Chat Server → Recipient.",
       "visible": ["clientA", "chatSvr", "clientB"],
       "highlight": ["clientA>chatSvr", "chatSvr>clientB"]
     },
     {
       "interviewer": "So where's the actual hard part?",
-      "interviewee": "The recipient is offline half the time, and one server can't hold a socket to everyone. So I need to know which server holds their connection, and store the messages they haven't received.",
-      "show": "Hard part: route across servers, and deliver to people who are offline.",
+      "interviewee": "Same three-box system under pressure: recipient is offline half the time, and one server cannot hold every socket. We need routing and durability next.",
+      "show": "Same complete online path. Offline + multi-server are the gaps.",
       "visible": ["clientA", "chatSvr", "clientB"],
       "highlight": ["chatSvr"]
     },
     {
       "interviewer": "Go deeper on that. How?",
-      "interviewee": "Keep a user-to-server map in Redis. On send, look up the recipient's server and forward. If they're offline, write the message to their inbox queue, something like Kafka, and deliver on reconnect.",
-      "show": "Presence map in Redis routes; offline messages queue in Kafka.",
-      "visible": ["clientA", "chatSvr", "presence", "inbox", "clientB"],
-      "highlight": ["presence", "chatSvr>presence", "inbox", "chatSvr>inbox", "inbox>clientB"]
+      "interviewee": "Full system now: persist first, presence map in Redis for which server holds the socket, online push to B, offline write to an inbox queue and deliver on reconnect.",
+      "show": "Complete: persist, presence, online push, offline inbox.",
+      "visible": ["clientA", "chatSvr", "presence", "inbox", "clientB", "store"],
+      "highlight": ["presence", "store", "inbox", "chatSvr>presence", "chatSvr>inbox"]
     },
     {
       "interviewer": "And group chat?",
-      "interviewee": "Same fan-out choice as a feed. Small groups, fan the message into each member's inbox. Huge groups, store once and pull on read. The real problem here is offline delivery and ordering, not the socket itself.",
-      "show": "Group = fan-out for small, pull-on-read for huge. Ordering is the real problem.",
-      "visible": ["clientA", "chatSvr", "presence", "inbox", "clientB"],
-      "highlight": ["inbox", "inbox>clientB"]
+      "interviewee": "Same complete fan-out shape. Small groups: fan each message into member inboxes. Huge groups: store once, pull on read. Ordering and offline delivery stay the hard parts, not the socket.",
+      "show": "Same full system. Group = fan-out vs pull-on-read.",
+      "visible": ["clientA", "chatSvr", "presence", "inbox", "clientB", "store"],
+      "highlight": ["inbox", "inbox>clientB", "store"]
     }
   ]
 }

@@ -6,6 +6,11 @@ carries the Redis mark, and so on. Any new topic (`src/episode/topics.ts` or a
 `src/episode/projects/*.json` file) should follow these rules so the whole series stays
 consistent.
 
+## Complete-system law (read first)
+
+**Every diagram beat is a full working system** (naive → scaled under interviewer
+pressure). Do not progressive-reveal fragments. Full rule: [`complete-system-law.md`](./complete-system-law.md).
+
 Each `DiagramNode` (see `src/episode/types.ts`) takes two optional fields:
 
 - `shape` — the visual form. Defaults to `service`.

@@ -21,36 +21,36 @@
   "beats": [
     {
       "interviewer": "For today's Software Engineer interview, design a news feed.",
-      "interviewee": "High level, two ways to build the timeline. Fan-out on write: when you post, copy it into every follower's feed cache, kept in Redis. Or fan-out on read: build the feed when someone opens the app.",
-      "show": "Two options: fan-out on write vs fan-out on read.",
+      "interviewee": "Complete fan-out-on-write first: when you post, copy into every follower's Redis feed cache. Opening the app is one lookup. Full write and read path.",
+      "show": "Complete fan-out-on-write: post → fan-out → cache ← home read.",
       "visible": ["poster", "fanout", "feedCache", "reader"],
-      "highlight": ["poster>fanout", "fanout>feedCache"]
+      "highlight": ["poster>fanout", "fanout>feedCache", "reader>feedCache"]
     },
     {
       "interviewer": "Pick one and defend it.",
-      "interviewee": "Fan-out on write is great for reads, one lookup. But it breaks the moment you have a celebrity, because one post is 50 million writes.",
-      "show": "Write fan-out = one-lookup reads, but a celebrity is 50M writes.",
-      "visible": ["poster", "fanout", "feedCache", "reader", "celeb"],
-      "highlight": ["reader>feedCache", "celeb"]
+      "interviewee": "Reads are cheap on that complete system, but a celebrity post is 50 million writes. The write path is the bomb.",
+      "show": "Same complete system. Celebrity detonates the fan-out writes.",
+      "visible": ["poster", "fanout", "feedCache", "reader"],
+      "highlight": ["fanout", "fanout>feedCache"]
     },
     {
       "interviewer": "So dig into that celebrity case. What do you do?",
-      "interviewee": "You do both. Fan-out on write for normal users, and for the handful of mega-accounts, skip the fan-out and merge their posts in at read time.",
-      "show": "Hybrid: precompute normal users, merge celebrity posts at read time.",
+      "interviewee": "Hybrid complete system: fan-out normals on write, skip fan-out for mega-accounts, merge their posts at read time into the home timeline.",
+      "show": "Hybrid complete: fan-out normals + merge celebs at read.",
       "visible": ["poster", "fanout", "feedCache", "reader", "celeb", "merge"],
       "highlight": ["celeb>merge", "merge>reader"]
     },
     {
       "interviewer": "Anything else you'd tune?",
-      "interviewee": "Gate the fan-out on whether a follower is actually active, so you're not precomputing feeds for accounts that never open the app, which is most of them.",
-      "show": "Only fan out to active followers; skip dormant accounts.",
+      "interviewee": "Only fan out to active followers so dormant accounts do not burn capacity. Same hybrid end-to-end system.",
+      "show": "Tune on full hybrid: fan out to active followers only.",
       "visible": ["poster", "fanout", "feedCache", "reader", "celeb", "merge"],
       "highlight": ["fanout", "fanout>feedCache"]
     },
     {
       "interviewer": "Sum it up.",
-      "interviewee": "The whole trick is precompute the common path, and compute the expensive path on demand.",
-      "show": "Precompute the common path; compute the expensive path lazily.",
+      "interviewee": "Precompute the common path, compute the expensive path on demand. That is the whole complete design.",
+      "show": "Full system takeaway: precompute common, lazy expensive.",
       "visible": ["poster", "fanout", "feedCache", "reader", "celeb", "merge"],
       "highlight": ["feedCache", "merge"]
     }

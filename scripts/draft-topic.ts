@@ -68,18 +68,28 @@ Rules:
   Put the entry point on the left.
 - Do NOT create two edges between the same pair of nodes (no A->B AND B->A) — their labels collide.
   Model a request/response as ONE edge. Keep edge labels under ~22 characters.
+
+COMPLETE-SYSTEM LAW (Arjay pattern) — STRICT, applies to every diagram beat:
+- Each diagram beat's "visible" set must form a FULL working system end-to-end (source → work →
+  sink). Not a progressive-reveal fragment. A viewer should see a runnable design every frame.
+- Beat 1 = naive but COMPLETE happy-path system (typically 3–4 nodes: entry, core, store/out).
+- Later beats: interviewer pressure (scale, failure, exactness) → still complete, with pieces
+  ADDED, REWORKED, or BRANCHED. "highlight" points at the delta.
+- FORBIDDEN: client+api with no store; stream→result with no counting middle; gateway with no
+  allow/deny exit; any orphan visible node with no edge in that beat.
+- Minimum 3 visible nodes on diagram beats; every visible node must participate in a visible edge.
+
 - 8 beats total: 6 diagram beats plus exactly 2 CODE-SLIDE beats interleaved where they fit best
-  (e.g. right after the beat that introduces the component the code implements). On the 6 diagram
-  beats "visible" is the cumulative list of node ids shown so far (beat 1 shows 1-2 nodes, the diagram
-  is complete by the end). "highlight" lists node ids and/or edges as "from>to" to emphasize a beat.
+  (e.g. right after the beat that introduces the component the code implements).
+  "highlight" lists node ids and/or edges as "from>to" to emphasize a beat.
 - CODE SLIDES: set "code" on 2 beats. The snippet MUST be copied VERBATIM from the source files
   below (do not invent or paraphrase code). Keep each snippet SHORT (about 8-16 lines, <= 60 chars
   per line, trim to the essential lines). "code.file" = the real path. "code.lang" = typescript, tsx,
   javascript, json, or bash. "code.tree" ALWAYS required: the folder structure the file lives in, one
   entry per line with 2-space indentation baked into "text" (e.g. "  src/" then "    orchestrator.ts"),
   and mark the shown file with "active": true. Use the real file paths from the PR file list below.
-  A code beat still needs interviewer/interviewee/show, and its "visible" should list the nodes shown
-  so far.
+  A code beat still needs interviewer/interviewee/show; "visible" should still list a complete
+  system (code slides are visually different but keep the same graph context).
 - NO em dashes anywhere in prose (interviewer/interviewee/show/tagline). Code is exempt. Every id in
   edges/visible/highlight MUST exist in nodes.
 - Return JSON only.`;

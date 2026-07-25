@@ -19,36 +19,36 @@
   "beats": [
     {
       "interviewer": "For today's Software Engineer interview, design a URL shortener.",
-      "interviewee": "High level, three moves: take a long URL, hand back a short code, and redirect on lookup. Simplest version, hash the URL, store the code-to-URL mapping in a key-value store, and redirect on the way back.",
-      "show": "A short link is just a lookup: code in, long URL out.",
+      "interviewee": "Complete naive system first: take a long URL, hash it, store code-to-URL in a key-value store, redirect on lookup. Three boxes, end to end.",
+      "show": "Naive complete: Client → API → KV. Hash, store, redirect.",
       "visible": ["client", "api", "kv"],
       "highlight": ["client>api", "api>kv"]
     },
     {
       "interviewer": "Say it gets popular. What breaks first?",
-      "interviewee": "Two things. A hash like MD5 is too long, and if I truncate it, it collides. And at a few thousand writes a second, that single row insert on the hot path becomes the ceiling.",
-      "show": "Hash is too long, truncating collides, and the write is the bottleneck.",
+      "interviewee": "Same full path under pressure. Hash is too long, truncating collides, and the hot write becomes the ceiling.",
+      "show": "Same complete path. Collisions + write bottleneck.",
       "visible": ["client", "api", "kv"],
       "highlight": ["kv", "api>kv"]
     },
     {
       "interviewer": "Let's go deeper on the code generation. Fix it.",
-      "interviewee": "Don't hash at all. Hand out a unique 64-bit ID from a counter, then base62-encode it. Seven characters gives 3.5 trillion links, and now the redirect is a single key lookup.",
-      "show": "Counter → base62. Seven chars = 3.5 trillion links.",
+      "interviewee": "Rework the middle: hand out a unique 64-bit ID from a counter, base62-encode it. Still Client → API → KV, now with a dedicated ID gen.",
+      "show": "Rework: Counter → base62. Full path still shortens and resolves.",
       "visible": ["client", "api", "idgen", "kv"],
       "highlight": ["idgen", "idgen>api"]
     },
     {
       "interviewer": "Is a central counter the only option?",
-      "interviewee": "No, and that's the real tradeoff. Want codes unguessable? Add a salt or a Hashids permutation. Can't tolerate a central counter? Pre-allocate ID ranges per server.",
-      "show": "Not the only way: salt for privacy, or pre-allocate ID ranges per server.",
+      "interviewee": "No. Salt or Hashids for unguessable codes, or pre-allocate ID ranges per server. Same complete system, different ID strategy.",
+      "show": "Same complete system. ID strategy tradeoffs only.",
       "visible": ["client", "api", "idgen", "kv"],
       "highlight": ["idgen"]
     },
     {
       "interviewer": "And the read path?",
-      "interviewee": "Reads beat writes about 100 to 1, so the whole job is making that redirect a cache hit. Keep the mapping in a key-value store like DynamoDB, and cache the hot links in Redis so the hot path never touches it.",
-      "show": "Reads ≫ writes. Mapping in DynamoDB, hot links cached in Redis.",
+      "interviewee": "Reads beat writes about 100 to 1. Keep the mapping in DynamoDB, add Redis read-through for hot links. Full shorten + resolve path still works.",
+      "show": "Add Redis hot-link cache. Complete path: API → cache → KV.",
       "visible": ["client", "api", "idgen", "kv", "cache"],
       "highlight": ["cache", "api>cache", "client>api"]
     }
