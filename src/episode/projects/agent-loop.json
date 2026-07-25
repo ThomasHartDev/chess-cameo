@@ -4,12 +4,12 @@
   "tagline": "The core of turbo-agent-kit, no framework, ~300 lines",
   "interviewPrompt": "build the core of an LLM agent loop from scratch, no framework",
   "nodes": [
-    { "id": "user", "label": "User", "sub": "message in", "x": 70, "y": 330 },
-    { "id": "orch", "label": "Orchestrator", "sub": "loop · max 5 steps", "x": 430, "y": 330 },
-    { "id": "llm", "label": "LLM Provider", "sub": "final | tool call", "x": 820, "y": 130 },
-    { "id": "tools", "label": "Tool Registry", "sub": "zod-validated", "x": 820, "y": 330 },
-    { "id": "telem", "label": "Telemetry", "sub": "latency per call", "x": 820, "y": 540 },
-    { "id": "out", "label": "Final Message", "sub": "onMessage stream", "x": 430, "y": 560 }
+    { "id": "user", "label": "User", "sub": "message in", "x": 70, "y": 330, "shape": "client" },
+    { "id": "orch", "label": "Orchestrator", "sub": "loop · max 5 steps", "x": 430, "y": 330, "shape": "service" },
+    { "id": "llm", "label": "LLM Provider", "sub": "final | tool call", "x": 820, "y": 130, "shape": "service" },
+    { "id": "tools", "label": "Tool Registry", "sub": "zod-validated", "x": 820, "y": 330, "shape": "component" },
+    { "id": "telem", "label": "Telemetry", "sub": "latency per call", "x": 820, "y": 540, "shape": "service" },
+    { "id": "out", "label": "Final Message", "sub": "onMessage stream", "x": 430, "y": 560, "shape": "client" }
   ],
   "edges": [
     { "from": "user", "to": "orch", "label": "user text" },
@@ -22,30 +22,31 @@
   "beats": [
     {
       "interviewer": "For today's software engineering interview: build the core of an LLM agent loop from scratch, no framework. Start with the shape.",
-      "interviewee": "Sure. At its core an agent loop is a conversation plus a controller that decides when to stop. I just merged this in turbo-agent-kit, about three hundred lines. Let me build it up.",
-      "show": "An agent loop is a conversation plus a controller that decides when to stop.",
-      "visible": ["user", "orch"],
-      "highlight": ["orch"]
+      "interviewee": "Complete naive loop first: user message in, orchestrator calls the model, final text out. No tools yet, but it is a full turn.",
+      "show": "Naive complete: User → Orchestrator → LLM → Final Message.",
+      "visible": ["user", "orch", "llm", "out"],
+      "highlight": ["user>orch", "orch>llm", "orch>out"]
     },
     {
       "interviewer": "What's the data model underneath it?",
-      "interviewee": "Everything is a list of messages: user, assistant, tool. A user message goes in, and the orchestrator owns the turn from there.",
-      "show": "One conversation is an ordered list of messages: user, assistant, tool.",
-      "visible": ["user", "orch"],
+      "interviewee": "Same complete turn. The conversation is an ordered list of messages: user, assistant, tool. Orchestrator owns the turn.",
+      "show": "Same full path. Data model: ordered user/assistant/tool messages.",
+      "visible": ["user", "orch", "llm", "out"],
       "highlight": ["user", "user>orch"]
     },
     {
       "interviewer": "How does the model actually decide to use a tool?",
-      "interviewee": "Each step I hand the whole message history to the model and ask one thing: give me a final answer, or a tool call.",
-      "show": "Every step asks the model: final text, or call a tool?",
-      "visible": ["user", "orch", "llm"],
+      "interviewee": "Each step still goes through the full path: hand history to the model, get final text or a tool call. Branch is the only new idea.",
+      "show": "Full turn: complete() returns final text or a tool call.",
+      "visible": ["user", "orch", "llm", "out"],
       "highlight": ["llm", "orch>llm"]
     },
     {
       "interviewer": "Show me the actual loop.",
-      "interviewee": "Here it is. Up to five steps. Ask the model. If the result is final, push it and return. Otherwise look up the tool it named, run it, and push the result back so the next pass can see it.",
-      "show": "The loop: complete, then final-or-tool, capped at 5 steps.",
-      "visible": ["user", "orch", "llm", "tools"],
+      "interviewee": "Here is the complete tool-using system: up to five steps, final or tool, registry lookup, push result, loop. Cap stops infinite spins.",
+      "show": "Complete loop: complete → final-or-tool, max 5 steps.",
+      "visible": ["user", "orch", "llm", "tools", "out"],
+      "highlight": ["tools", "llm>tools", "tools>orch"],
       "code": {
         "file": "packages/agent-core/src/orchestrator.ts",
         "lang": "typescript",
@@ -63,16 +64,16 @@
     },
     {
       "interviewer": "Say it asks for a tool. What happens then?",
-      "interviewee": "The name is looked up in a registry and the arguments are validated with zod before a single line runs.",
-      "show": "Tool calls resolve by name in a registry; args are zod-validated first.",
-      "visible": ["user", "orch", "llm", "tools"],
-      "highlight": ["tools", "llm>tools"]
+      "interviewee": "On the full system: name lookup in the registry, zod-validate args, run, push tool result, call the model again.",
+      "show": "Full tool path: registry lookup + zod, then back into the loop.",
+      "visible": ["user", "orch", "llm", "tools", "out"],
+      "highlight": ["tools", "llm>tools", "tools>orch"]
     },
     {
       "interviewer": "How do you stop the model from calling a tool with garbage arguments?",
-      "interviewee": "Every tool is defined with a zod schema, and run parses the args before the body executes. Bad arguments throw right there instead of reaching my code.",
-      "show": "defineTool: zod-parse the args before the tool body runs.",
-      "visible": ["user", "orch", "llm", "tools"],
+      "interviewee": "Every tool is defined with a zod schema. run parses before the body. Bad args never reach my code. Same complete loop.",
+      "show": "Same complete system. defineTool zod-parses before run.",
+      "visible": ["user", "orch", "llm", "tools", "out"],
       "code": {
         "file": "packages/agent-core/src/tools.ts",
         "lang": "typescript",
@@ -90,15 +91,15 @@
     },
     {
       "interviewer": "And you feed the result back into the model?",
-      "interviewee": "Right. The tool output gets pushed into the conversation and the loop runs again. It is capped at five steps so it can never spin forever.",
-      "show": "Tool output feeds back in; the loop repeats, capped at 5 steps.",
-      "visible": ["user", "orch", "llm", "tools"],
+      "interviewee": "Yes. Tool output re-enters the conversation on the same complete loop, capped at five steps.",
+      "show": "Full loop closed: tool result → orchestrator → model again.",
+      "visible": ["user", "orch", "llm", "tools", "out"],
       "highlight": ["tools>orch", "orch"]
     },
     {
       "interviewer": "Anything you would add before we wrap?",
-      "interviewee": "Two things I bolted on. Telemetry times every model and tool call, and an onMessage hook streams each message so a UI can show the turn as it happens.",
-      "show": "Telemetry times every call; onMessage streams the turn live.",
+      "interviewee": "Telemetry on every model and tool call, and onMessage so the UI streams the turn. Full production agent loop.",
+      "show": "Complete production: loop + tools + telemetry + stream out.",
       "visible": ["user", "orch", "llm", "tools", "telem", "out"],
       "highlight": ["telem", "out", "orch>telem"]
     }

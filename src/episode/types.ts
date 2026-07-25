@@ -62,9 +62,16 @@ export interface Beat {
   interviewer?: string;
   /** On-screen line (the lower-third caption). */
   show: string;
-  /** Node ids visible on this frame. */
+  /**
+   * Node ids visible on this frame.
+   *
+   * COMPLETE-SYSTEM LAW: for diagram beats (no `code`), this set must form a full
+   * end-to-end working system (source → work → sink), not a progressive-reveal fragment.
+   * Complexity grows across beats via interviewer follow-ups (add / rework / branch).
+   * See docs/complete-system-law.md.
+   */
   visible: string[];
-  /** Node/edge ids to emphasize (nodes by id, edges as "from>to"). */
+  /** Node/edge ids to emphasize (nodes by id, edges as "from>to") — usually the delta. */
   highlight?: string[];
   /** When present, this beat renders as a code slide (snippet + folder tree) instead of the diagram. */
   code?: CodeBlock;
@@ -78,6 +85,10 @@ export interface Topic {
   interviewPrompt?: string;
   nodes: DiagramNode[];
   edges: DiagramEdge[];
+  /**
+   * Interview beats. Each diagram beat is a complete system at that maturity level
+   * (naive first, then reworked under follow-ups). Not a single graph revealed piece by piece.
+   */
   beats: Beat[];
 }
 
