@@ -1,0 +1,55 @@
+{
+  "slug": "cli-rg-pipes",
+  "seriesId": "cli-tools",
+  "cliLevel": 1,
+  "tools": ["rg", "jq", "git", "pipe"],
+  "title": "Search the tree: rg, pipes, and jq",
+  "tagline": "Find the string, shape the JSON, don't drown in output",
+  "interviewPrompt": "You need to find every call site for a broken API route and confirm the JSON shape. Walk me through it on the command line.",
+  "nodes": [
+    { "id": "cwd", "label": "cwd", "sub": "repo root", "x": 60, "y": 200, "shape": "client" },
+    { "id": "rg", "label": "rg", "sub": "search", "x": 300, "y": 200, "shape": "service" },
+    { "id": "jq", "label": "jq", "sub": "shape JSON", "x": 540, "y": 200, "shape": "component" },
+    { "id": "out", "label": "stdout", "sub": "answers", "x": 780, "y": 200, "shape": "db" }
+  ],
+  "edges": [
+    { "from": "cwd", "to": "rg", "label": "files" },
+    { "from": "rg", "to": "jq", "label": "|" },
+    { "from": "jq", "to": "out", "label": "rows" }
+  ],
+  "beats": [
+    {
+      "interviewer": "You're in a big monorepo. Find every reference to /api/phone-cam without opening the IDE search UI.",
+      "interviewee": "From the repo root: rg -n \"phone-cam\" --glob '!node_modules'. rg is ripgrep — recursive, respects gitignore, fast enough to feel instant.",
+      "show": "rg -n 'phone-cam' — recursive, gitignore-aware.",
+      "visible": ["cwd", "rg", "out"],
+      "highlight": ["cwd>rg", "rg>out"],
+      "loopMode": "work"
+    },
+    {
+      "interviewer": "You got three thousand hits. Now what? How do you not drown?",
+      "interviewee": "Narrow: rg -n \"phone-cam\" -g '*.ts' -g '!**/dist/**' app components. Then pipe a JSON dump if the tool emits JSON: … | jq '.[] | .path'.",
+      "show": "Filter globs, then jq for structure.",
+      "visible": ["cwd", "rg", "jq", "out"],
+      "highlight": ["rg>jq", "jq>out"],
+      "loopMode": "work"
+    },
+    {
+      "interviewer": "What breaks first for juniors here?",
+      "interviewee": "Piping binary garbage into jq, or forgetting quotes so the shell eats the pattern. And running from the wrong cwd so rg 'finds nothing' that exists two levels up.",
+      "show": "break: bad cwd, unquoted pattern, jq on non-JSON.",
+      "visible": ["cwd", "rg", "jq", "out"],
+      "highlight": ["rg>jq"],
+      "loopMode": "break",
+      "failTarget": "rg>jq"
+    },
+    {
+      "interviewer": "Show me a safe daily habit.",
+      "interviewee": "pwd first. Then rg with a tight glob. Prefer | head while exploring. Commit only after git diff shows the intentional change — search is read-only; edit is a separate step.",
+      "show": "pwd → tight rg → head → intentional edit.",
+      "visible": ["cwd", "rg", "jq", "out"],
+      "highlight": ["cwd", "out"],
+      "loopMode": "work"
+    }
+  ]
+}
